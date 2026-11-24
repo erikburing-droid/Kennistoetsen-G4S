@@ -1,0 +1,676 @@
+<!-- ====================================================================================================
+// G4S KENNISTOETSEN - POWER BI STIJL DASHBOARD (MET ECHTE DATA & CASCADING FILTERS)
+// ==================================================================================================== -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="bg-[#f3f2f1] p-[30px] -m-[30px] min-h-[calc(100vh-80px)] font-sans relative">
+  
+  <!-- Header -->
+  <div class="flex justify-between items-center mb-6">
+    <div>
+      <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">POWERBI ANALYTICS</h2>
+      <p class="text-slate-500 text-sm mt-1 font-medium">Interactieve rapportages en trend analyses</p>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn-outline text-xs bg-white shadow-sm hover:shadow flex items-center gap-1" title="Filters wissen" onclick="resetPBFilters()">
+        <span class="material-icons text-[16px]">filter_alt_off</span> Filters
+      </button>
+      <button class="btn-outline text-xs bg-white shadow-sm hover:shadow flex items-center gap-1" title="Data verversen" onclick="loadPowerBIData(true)">
+        <span class="material-icons text-[16px]">refresh</span> Data Verversen
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters Row -->
+  <div class="bg-white p-4 rounded shadow-sm mb-6 flex flex-wrap gap-6 items-end border border-slate-200 relative z-30">
+    <div class="flex-1 min-w-[150px]">
+      <label class="block text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-widest">Filter Regio</label>
+      <div id="pb-flt-regio-wrap"></div>
+    </div>
+    <div class="flex-1 min-w-[150px]">
+      <label class="block text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-widest">Filter Klant</label>
+      <div id="pb-flt-object-wrap"></div>
+    </div>
+    <div class="flex-1 min-w-[150px]">
+      <label class="block text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-widest">Filter Toets</label>
+      <div id="pb-flt-toets-wrap"></div>
+    </div>
+    <div class="flex-1 min-w-[150px]">
+      <label class="block text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-widest">Filter Manager</label>
+      <div id="pb-flt-manager-wrap"></div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div class="bg-[#111827] text-white p-6 rounded shadow-md flex flex-col justify-center items-center">
+      <div id="pb-kpi-total" class="text-4xl font-light mb-2">-</div>
+      <div class="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">Medewerkers totaal</div>
+    </div>
+    <div class="bg-[#111827] text-white p-6 rounded shadow-md flex flex-col justify-center items-center">
+      <div id="pb-kpi-geslaagd" class="text-4xl font-light mb-2">-</div>
+      <div class="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">Geslaagd</div>
+    </div>
+    <div class="bg-[#111827] text-white p-6 rounded shadow-md flex flex-col justify-center items-center">
+      <div id="pb-kpi-gezakt" class="text-4xl font-light mb-2">-</div>
+      <div class="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">Gezakt</div>
+    </div>
+    <div class="bg-[#111827] text-white p-6 rounded shadow-md flex flex-col justify-center items-center">
+      <div id="pb-kpi-todo" class="text-4xl font-light mb-2">-</div>
+      <div class="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">Nog te doen</div>
+    </div>
+    <div class="bg-[#111827] text-white p-6 rounded shadow-md flex flex-col justify-center items-center">
+      <div id="pb-kpi-perc" class="text-4xl font-light mb-2">-</div>
+      <div class="text-[10px] text-slate-400 text-center uppercase tracking-widest font-bold">Slagingspercentage</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    
+    <!-- Chart 1: Per Regio -->
+    <div class="bg-white p-5 rounded shadow-sm border border-slate-100 flex flex-col">
+      <h3 class="text-sm text-slate-700 mb-4 font-bold">Toets resultaten per regio</h3>
+      <div class="flex-grow relative min-h-[250px]">
+        <canvas id="pbChartRegio"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 2: Gauge -->
+    <div class="bg-white p-5 rounded shadow-sm border border-slate-100 flex flex-col items-center relative overflow-hidden">
+      <h3 class="text-sm text-slate-700 mb-4 font-bold self-start absolute top-5 left-5 z-10">Slagingspercentage</h3>
+      <div class="relative w-[80%] mt-12 flex justify-center items-center">
+        <div class="absolute inset-0 flex items-end justify-center pb-4 z-10">
+           <span id="pb-gauge-text" class="text-4xl font-light text-slate-600">-</span>
+        </div>
+        <canvas id="pbChartGauge" class="relative z-20"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 3: Per Klant -->
+    <div class="bg-white p-5 rounded shadow-sm border border-slate-100 flex flex-col">
+      <h3 class="text-sm text-slate-700 mb-4 font-bold">Toets resultaten per klant (Top 10)</h3>
+      <div class="flex-grow relative min-h-[250px]">
+        <canvas id="pbChartObject"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Table -->
+  <div class="bg-white p-5 rounded shadow-sm border border-slate-100 overflow-hidden">
+    <h3 class="text-sm text-slate-700 mb-4 font-bold">Detailgegevens (Klik op een rij voor meer informatie)</h3>
+    <div class="overflow-x-auto max-h-[400px] custom-scrollbar">
+      <table class="data-table w-full text-left text-xs">
+        <thead class="sticky top-0 bg-slate-50 shadow-sm z-10">
+          <tr class="border-b border-slate-200">
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px] w-[115px]">Datum gemaakt</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px] w-[90px]">Regio</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Klant</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Naam</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px] text-right w-[75px]">Score</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px] text-right w-[65px]">Norm</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px] text-right w-[140px]" title="Tijd Deelnemer / Maximale Toetstijd">Tijd (Deeln / Inst)</th>
+            <th class="py-2.5 px-2 font-bold text-slate-500 uppercase tracking-widest text-[10px] text-left w-[110px]">Resultaat</th>
+          </tr>
+        </thead>
+        <tbody id="pb-table-body" class="text-slate-700">
+          <!-- Rijen worden hier dynamisch ingeladen -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modal voor Detailgegevens bij Tabel Rij Klik -->
+  <div id="pb-row-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden border-t-4 border-[#D32F2F] flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-center p-5 border-b border-slate-200 shrink-0">
+        <h3 class="text-lg font-bold text-[#232323] flex items-center gap-2">
+          <span class="material-icons text-[#D32F2F]">person</span> Onderliggende Detailgegevens
+        </h3>
+        <button onclick="document.getElementById('pb-row-modal').classList.add('hidden')" class="text-slate-400 hover:text-red-600 transition-colors">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div id="pb-row-modal-content" class="p-6 space-y-3 text-sm text-slate-700 overflow-y-auto">
+        <!-- Inhoud wordt hier door JavaScript ingevuld -->
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  window.pbChartObjInstance = null;
+  window.pbChartRegInstance = null;
+  window.pbChartGaugeInstance = null;
+  window.pbDataRaw = null; 
+  window.currentPBFilteredData = [];
+  window.pbStatusFilter = 'Alle'; // Globale Status Filter via de legenda
+
+  function loadPowerBIData(force, silent) {
+    if (typeof silent === 'undefined') silent = false;
+    if (!force && window.pbDataRaw !== null) {
+      initPowerBIFilters();
+      if (!silent) ld(false);
+      return;
+    }
+
+    if (!silent) ld(true);
+    let isLoaded = false;
+
+    if (!silent) {
+      setTimeout(() => {
+        if (!isLoaded) {
+          ld(false);
+          showModal("De verbinding met de database is traag. Probeer de pagina te verversen (F5).");
+        }
+      }, 15000);
+    }
+
+    if(typeof google === 'undefined') {
+       setTimeout(() => { 
+         isLoaded = true; 
+         window.pbDataRaw = [];
+         if (!silent) ld(false); 
+         if (!silent) showModal("Data wordt enkel ingeladen in live omgeving."); 
+       }, 500);
+       return;
+    }
+    
+    // Oplossing: Geef het actieve/geïmpersoneerde e-mailadres mee
+    google.script.run
+      .withSuccessHandler(data => {
+        isLoaded = true; 
+        try {
+          window.pbDataRaw = data || [];
+          
+          // FOOLPROOF DATA LADEN: Zorg dat tests en allResults ALTIJD geladen zijn voor de testnaam-mapping
+          let finalize = () => {
+              initPowerBIFilters();
+              if (!silent) ld(false);
+          };
+
+          let checkResults = () => {
+              if (typeof allResults === 'undefined' || allResults.length === 0) {
+                  google.script.run.withSuccessHandler(res => {
+                      window.allResults = res;
+                      if (typeof DATA_CACHE !== 'undefined') DATA_CACHE.results = res;
+                      finalize();
+                  }).withFailureHandler(() => finalize()).getAllResultsData(userEmail);
+              } else {
+                  finalize();
+              }
+          };
+
+          if (typeof tests === 'undefined' || tests.length === 0) {
+              google.script.run.withSuccessHandler(d => {
+                  window.tests = d.tests ? d.tests : d;
+                  if (typeof DATA_CACHE !== 'undefined') DATA_CACHE.index = window.tests;
+                  checkResults();
+              }).withFailureHandler(() => checkResults()).getToetsenOverzicht(userEmail);
+          } else {
+              checkResults();
+          }
+          
+        } catch(e) {
+          console.error("Fout tijdens renderen PowerBI dashboard:", e);
+          if (!silent) {
+             showModal("Er is een fout opgetreden bij het inladen van de grafieken.");
+             ld(false);
+          }
+        }
+      })
+      .withFailureHandler(err => {
+        isLoaded = true; 
+        if (!silent) {
+          ld(false);
+          showModal("Fout bij ophalen van data uit database: " + err.message);
+        }
+      })
+      .getPowerBIData(userEmail, force === true);
+  }
+
+  window.pbMultiSelects = {};
+
+  function initPowerBIFilters() {
+    if (!window.MultiSelect) {
+      setTimeout(initPowerBIFilters, 100);
+      return;
+    }
+    if (!window.pbMultiSelects.regio) {
+      window.pbMultiSelects.regio = new MultiSelect({
+        container: 'pb-flt-regio-wrap',
+        id: 'pb-flt-regio',
+        placeholder: 'Alle',
+        allLabel: 'Alle Regio\'s',
+        styleType: 'underline',
+        onChange: function() { applyPBFilters(); }
+      });
+    }
+    if (!window.pbMultiSelects.locatie) {
+      window.pbMultiSelects.locatie = new MultiSelect({
+        container: 'pb-flt-object-wrap',
+        id: 'pb-flt-object',
+        placeholder: 'Alle',
+        allLabel: 'Alle Klanten',
+        styleType: 'underline',
+        onChange: function() { applyPBFilters(); }
+      });
+    }
+    if (!window.pbMultiSelects.toetsNaam) {
+      window.pbMultiSelects.toetsNaam = new MultiSelect({
+        container: 'pb-flt-toets-wrap',
+        id: 'pb-flt-toets',
+        placeholder: 'Alle',
+        allLabel: 'Alle Toetsen',
+        styleType: 'underline',
+        onChange: function() { applyPBFilters(); }
+      });
+    }
+    if (!window.pbMultiSelects.manager) {
+      window.pbMultiSelects.manager = new MultiSelect({
+        container: 'pb-flt-manager-wrap',
+        id: 'pb-flt-manager',
+        placeholder: 'Alle',
+        allLabel: 'Alle Managers',
+        styleType: 'underline',
+        onChange: function() { applyPBFilters(); }
+      });
+    }
+    applyPBFilters();
+  }
+
+  function resetPBFilters() {
+    try {
+      if (window.pbMultiSelects) {
+        Object.keys(window.pbMultiSelects).forEach(function(k) {
+          if (window.pbMultiSelects[k]) window.pbMultiSelects[k].setSelected([], false);
+        });
+      }
+      window.pbStatusFilter = 'Alle'; // Zorg dat de legenda filter ook wist
+      applyPBFilters();
+    } catch(e) {
+      console.error("Reset Filters Fout:", e);
+    }
+  }
+
+  function applyPBFilters() {
+    try {
+      const state = {
+        regio: (window.pbMultiSelects && window.pbMultiSelects.regio) ? window.pbMultiSelects.regio.getSelected() : [],
+        locatie: (window.pbMultiSelects && window.pbMultiSelects.locatie) ? window.pbMultiSelects.locatie.getSelected() : [],
+        toetsNaam: (window.pbMultiSelects && window.pbMultiSelects.toetsNaam) ? window.pbMultiSelects.toetsNaam.getSelected() : [],
+        manager: (window.pbMultiSelects && window.pbMultiSelects.manager) ? window.pbMultiSelects.manager.getSelected() : []
+      };
+
+      const fields = [
+        { id: 'pb-flt-regio', key: 'regio' },
+        { id: 'pb-flt-object', key: 'locatie' },
+        { id: 'pb-flt-toets', key: 'toetsNaam' },
+        { id: 'pb-flt-manager', key: 'manager' }
+      ];
+
+      // SLIMME FUZZY MATCH FUNCTIE
+      const getPBVal = (d, key) => {
+        if (key === 'toetsNaam') {
+          // 1. Directe velden
+          if (d.toetsNaam) return String(d.toetsNaam).trim();
+          if (d.toets) return String(d.toets).trim();
+          if (d.ToetsNaam) return String(d.ToetsNaam).trim();
+          if (d.Toets) return String(d.Toets).trim();
+          if (d.naamToets) return String(d.naamToets).trim();
+          
+          let globalTests = typeof tests !== 'undefined' ? tests : [];
+          
+          // 2. Map via Database ID
+          let tId = d.toetsId || d.toets_id || d.id || d.ToetsID;
+          if (tId && globalTests.length > 0) {
+              let match = globalTests.find(t => String(t.id) === String(tId));
+              if (match && match.naam) return String(match.naam).trim();
+          }
+          
+          // 3. Map via allResults data kruisverwijzing (Robuust!)
+          let globalResults = typeof allResults !== 'undefined' ? allResults : [];
+          if (globalResults.length > 0) {
+              // A: Match op exact dezelfde JSON details (100% uniek per gemaakte toets)
+              if (d.details && d.details.length > 10) {
+                  let exactMatch = globalResults.find(r => r.details === d.details);
+                  if (exactMatch && exactMatch.toetsNaam) return String(exactMatch.toetsNaam).trim();
+              }
+              
+              // B: Fuzzy match op Kandidaat en Score (Dwarst door % tekens en haakjes heen)
+              let cleanScoreD = parseInt(String(d.score).replace(/[^0-9]/g, ''));
+              let match = globalResults.find(r => {
+                  let cleanScoreR = parseInt(String(r.score).replace(/[^0-9]/g, ''));
+                  
+                  let dEmail = String(d.email || '').toLowerCase().trim();
+                  let dNaam = String(d.naam || '').toLowerCase().trim();
+                  let rEmail = String(r.email || '').toLowerCase().trim();
+                  
+                  let emailMatch = false;
+                  if (rEmail === dEmail || rEmail === dNaam) emailMatch = true;
+                  if (dEmail && rEmail.indexOf(dEmail) > -1) emailMatch = true;
+                  if (dNaam && rEmail.indexOf(dNaam) > -1) emailMatch = true;
+                  
+                  return emailMatch && (cleanScoreD === cleanScoreR) && (r.status === d.status);
+              });
+              if (match && match.toetsNaam) return String(match.toetsNaam).trim();
+          }
+          
+          // 4. Fallback: Zoek of een string eigenschap toevallig exact overeenkomt met een bekende toetsnaam
+          if (globalTests.length > 0) {
+              for (let k in d) {
+                  if (typeof d[k] === 'string' && k !== 'regio' && k !== 'locatie' && k !== 'manager' && k !== 'naam' && k !== 'email') {
+                      let valLower = String(d[k]).trim().toLowerCase();
+                      let actualName = globalTests.find(t => String(t.naam).trim().toLowerCase() === valLower);
+                      if (actualName) {
+                          return String(actualName.naam).trim(); 
+                      }
+                  }
+              }
+          }
+          
+          return "Onbekende Toets"; 
+        }
+        return d[key] !== undefined && d[key] !== null ? String(d[key]).trim() : "Onbekend";
+      };
+
+      fields.forEach(f => {
+        const availableOptionsData = (window.pbDataRaw || []).filter(d => {
+          return fields.every(other => {
+            if (other.key === f.key) return true;
+            const sel = state[other.key] || [];
+            if (sel.length === 0) return true;
+            return sel.includes(getPBVal(d, other.key));
+          });
+        });
+
+        // Verwijder "Onbekende Toets" uit de dropdown lijst zodat deze schoon blijft
+        let opts = [...new Set(availableOptionsData.map(d => getPBVal(d, f.key)))]
+                  .filter(v => v && v !== "Onbekend" && v !== "Onbekende Toets" && v !== "") 
+                  .sort();
+
+        if (window.pbMultiSelects && window.pbMultiSelects[f.key]) {
+          const cur = state[f.key] || [];
+          const valid = cur.filter(v => opts.includes(v));
+          window.pbMultiSelects[f.key].setOptions(opts, valid, false);
+          state[f.key] = valid;
+        }
+      });
+
+      // Filter Data met Dropdowns EN de Legenda Status filter
+      window.currentPBFilteredData = (window.pbDataRaw || []).filter(d => {
+        const passesFields = fields.every(f => {
+          const sel = state[f.key] || [];
+          if (sel.length === 0) return true;
+          return sel.includes(getPBVal(d, f.key));
+        });
+        
+        const passesStatus = (window.pbStatusFilter === 'Alle') ? true : 
+                             (window.pbStatusFilter === 'Gezakt' ? d.status.indexOf('Gezakt') > -1 : d.status === window.pbStatusFilter);
+        
+        return passesFields && passesStatus;
+      });
+
+      updatePBWidgets(window.currentPBFilteredData);
+      
+    } catch (e) {
+      console.error("Filter Fout:", e);
+    }
+  }
+
+  function updatePBWidgets(data) {
+    try {
+      const countTot = data.length;
+      const countGes = data.filter(d => d.status === 'Geslaagd').length;
+      const countGez = data.filter(d => d.status.indexOf('Gezakt') > -1).length;
+      const countTodo = data.filter(d => d.status === 'Nog te doen').length;
+      const complTot = countGes + countGez;
+      const perc = complTot > 0 ? Math.round((countGes / complTot) * 100) : 0;
+
+      document.getElementById('pb-kpi-total').innerText = countTot;
+      document.getElementById('pb-kpi-geslaagd').innerText = countGes;
+      document.getElementById('pb-kpi-gezakt').innerText = countGez;
+      document.getElementById('pb-kpi-todo').innerText = countTodo;
+      document.getElementById('pb-kpi-perc').innerText = complTot > 0 ? perc + '%' : '-';
+      document.getElementById('pb-gauge-text').innerText = complTot > 0 ? perc + '%' : '-';
+    } catch(e) {
+      console.error("Fout bij bijwerken KPIs:", e);
+    }
+
+    try {
+      const tBody = document.getElementById('pb-table-body');
+      if(data.length === 0) {
+        tBody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-slate-400 italic">Geen data gevonden met huidige filters</td></tr>';
+      } else {
+        tBody.innerHTML = data.slice(0, 50).map((d, i) => {
+          let bClass = 'bg-slate-100 text-slate-600';
+          if(d.status === 'Geslaagd') bClass = 'bg-green-100 text-green-700';
+          else if(d.status.indexOf('Gezakt') > -1) bClass = 'bg-red-100 text-red-700';
+          else if(d.status === 'Nog te doen') bClass = 'bg-slate-200 text-slate-500';
+          
+          let tijdDisplay = '-';
+          if (d.tijdDeelnemer || d.tijdInstelling) {
+            tijdDisplay = `<span class="font-medium text-slate-700">${d.tijdDeelnemer || '-'}</span> <span class="text-slate-400 text-[10px]">/ ${d.tijdInstelling || '-'}</span>`;
+          }
+
+          return `<tr onclick="showPBRowDetails(${i})" class="cursor-pointer border-b border-slate-100 hover:bg-slate-50 transition-colors">
+            <td data-label="DATUM" class="py-2 px-2 text-slate-600">${d.datumGemaakt || '-'}</td>
+            <td data-label="REGIO" class="py-2 px-2 text-slate-600">${d.regio || '-'}</td>
+            <td data-label="KLANT" class="py-2 px-2 text-slate-800 font-medium break-words">${d.locatie || '-'}</td>
+            <td data-label="NAAM" class="py-2 px-2 text-slate-800 break-words">${d.naam || '-'}</td>
+            <td data-label="SCORE" class="py-2 px-2 text-right font-bold text-slate-800 md:text-right text-left">${d.score || '-'}</td>
+            <td data-label="NORM" class="py-2 px-2 text-right text-slate-600 md:text-right text-left">${d.norm || '-'}</td>
+            <td data-label="TIJD" class="py-2 px-2 text-right md:text-right text-left">${tijdDisplay}</td>
+            <td data-label="RESULTAAT" class="py-2 px-2 text-left md:text-left text-left"><span class="inline-block px-2 py-0.5 rounded ${bClass} font-bold text-[10px] tracking-wide uppercase">${d.status}</span></td>
+          </tr>`;
+        }).join('');
+      }
+    } catch(e) {
+      console.error("Fout bij bijwerken Tabel:", e);
+    }
+
+    try {
+      if (typeof Chart === 'undefined') {
+        console.warn("Chart.js plugin is nog niet geladen (mogelijk trage verbinding of geblokkeerd door adblocker/firewall).");
+        return;
+      }
+      
+      const groupData = (key) => {
+        const g = {};
+        data.forEach(d => {
+          let v = d[key] || "Onbekend";
+          if(!g[v]) g[v] = { g: 0, f: 0, t: 0 };
+          if(d.status === 'Geslaagd') g[v].g++;
+          else if(d.status.indexOf('Gezakt') > -1) g[v].f++;
+          else g[v].t++;
+        });
+        return Object.keys(g).map(k => ({ label: k, ...g[k] })).sort((a,b) => (b.g+b.f+b.t) - (a.g+a.f+a.t));
+      };
+
+      Chart.defaults.font.family = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+      Chart.defaults.color = '#64748B';
+
+      const legendClickHandler = (e, legendItem, legend) => {
+        const status = legendItem.text;
+        if (window.pbStatusFilter === status) {
+          window.pbStatusFilter = 'Alle';
+        } else {
+          window.pbStatusFilter = status;
+        }
+        applyPBFilters();
+      };
+
+      const objGroup = groupData('locatie').slice(0, 10);
+      if(window.pbChartObjInstance) window.pbChartObjInstance.destroy();
+      window.pbChartObjInstance = new Chart(document.getElementById('pbChartObject').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: objGroup.map(o => o.label),
+          datasets: [
+            { label: 'Geslaagd', data: objGroup.map(o => o.g), backgroundColor: '#10b981', barThickness: 15 },
+            { label: 'Gezakt', data: objGroup.map(o => o.f), backgroundColor: '#ef4444', barThickness: 15 },
+            { label: 'Nog te doen', data: objGroup.map(o => o.t), backgroundColor: '#cbd5e1', barThickness: 15 }
+          ]
+        },
+        options: { 
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false, 
+          scales: { x: { stacked: true, grid: { color: '#f1f5f9' } }, y: { stacked: true, grid: { display: false } } }, 
+          plugins: { 
+            legend: { 
+              position: 'bottom', 
+              labels: { usePointStyle: true, boxWidth: 8 },
+              onClick: legendClickHandler
+            } 
+          }
+        }
+      });
+
+      const regGroup = groupData('regio');
+      if(window.pbChartRegInstance) window.pbChartRegInstance.destroy();
+      window.pbChartRegInstance = new Chart(document.getElementById('pbChartRegio').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: regGroup.map(o => o.label),
+          datasets: [
+            { label: 'Geslaagd', data: regGroup.map(o => o.g), backgroundColor: '#10b981', barThickness: 15 },
+            { label: 'Gezakt', data: regGroup.map(o => o.f), backgroundColor: '#ef4444', barThickness: 15 },
+            { label: 'Nog te doen', data: regGroup.map(o => o.t), backgroundColor: '#cbd5e1', barThickness: 15 }
+          ]
+        },
+        options: { 
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false, 
+          scales: { x: { stacked: true, grid: { color: '#f1f5f9' } }, y: { stacked: true, grid: { display: false } } }, 
+          plugins: { 
+            legend: { 
+              position: 'bottom', 
+              labels: { usePointStyle: true, boxWidth: 8 },
+              onClick: legendClickHandler
+            } 
+          }
+        }
+      });
+
+      const countGes = data.filter(d => d.status === 'Geslaagd').length;
+      const countGez = data.filter(d => d.status.indexOf('Gezakt') > -1).length;
+      const complTot = countGes + countGez;
+      const perc = complTot > 0 ? Math.round((countGes / complTot) * 100) : 0;
+      
+      let gaugeData = [perc, 100-perc];
+      if (complTot === 0) gaugeData = [0, 100]; // Toon een lege grijze boog als er nog niemand is geslaagd/gezakt
+
+      if(window.pbChartGaugeInstance) window.pbChartGaugeInstance.destroy();
+      window.pbChartGaugeInstance = new Chart(document.getElementById('pbChartGauge').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Geslaagd', 'Overig'],
+          datasets: [{ data: gaugeData, backgroundColor: ['#10b981', '#e2e8f0'], borderWidth: 0, circumference: 180, rotation: 270 }]
+        },
+        options: { 
+          responsive: true, maintainAspectRatio: false, cutout: '75%', 
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          animation: { animateRotate: true, animateScale: false }
+        }
+      });
+
+    } catch(e) {
+      console.error("Fout bij tekenen Grafieken:", e);
+    }
+  }
+
+  function showPBRowDetails(index) {
+    const d = window.currentPBFilteredData[index];
+    if (!d || d.status === 'Nog te doen') return; // Voorkom klik op openstaande acties
+    const escapeHtml = value => String(value == null || value === '' ? '-' : value).replace(/[&<>"']/g, character => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[character]);
+    
+    let statusClass = 'bg-slate-100 text-slate-600';
+    if(d.status === 'Geslaagd') statusClass = 'bg-green-100 text-green-700';
+    else if(d.status.indexOf('Gezakt') > -1) statusClass = 'bg-red-100 text-red-700';
+
+    let detailsHtml = '';
+    try {
+      const parsedDetails = JSON.parse(d.details);
+      if (parsedDetails && parsedDetails.length > 0) {
+        detailsHtml = '<div class="col-span-1 md:col-span-2 mt-4"><h4 class="font-bold text-[#D32F2F] border-b pb-2 mb-3">Ingevulde Vragen (Fouten Analyse)</h4><div class="space-y-3">';
+        
+        let fouten = parsedDetails.filter(q => !q.isCorrect);
+        
+        if (fouten.length === 0) {
+            detailsHtml += '<div class="p-3 bg-green-50 text-green-800 rounded font-medium">Geweldig, geen fouten gemaakt!</div>';
+        } else {
+            fouten.forEach((q, i) => {
+               detailsHtml += `
+                 <div class="p-3 border rounded bg-red-50 border-red-200">
+                   <div class="font-bold text-slate-800 text-sm mb-1">${escapeHtml(q.question)}</div>
+                   <div class="text-xs text-red-700 flex flex-col mt-2">
+                     <div class="mb-1"><span class="font-semibold text-slate-600">Gegeven antwoord:</span> ${escapeHtml(q.givenAnswer)}</div>
+                     <div><span class="font-semibold text-slate-600">Correct antwoord:</span> <b class="font-bold">${escapeHtml(q.correctAnswer)}</b></div>
+                   </div>
+                 </div>
+               `;
+            });
+        }
+        
+        detailsHtml += '</div></div>';
+      }
+    } catch(e) {
+      console.error("Fout bij inladen vragen in modal:", e);
+    }
+
+    const content = `
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 border border-slate-100 p-4 rounded bg-slate-50">
+        <div class="font-semibold text-slate-500 py-1">Datum & Tijd:</div>
+        <div class="font-medium text-slate-800 py-1">${escapeHtml(d.datumGemaakt)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">Kandidaat / Account:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">
+          ${escapeHtml(d.naam)} <br>
+          <span class="text-xs font-normal text-slate-400">${escapeHtml(d.email)}</span>
+        </div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 mt-1 pt-2">Regio:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 mt-1 pt-2">${escapeHtml(d.regio)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">Klant:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">${escapeHtml(d.locatie)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 mt-1 pt-2">Manager:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 mt-1 pt-2">${escapeHtml(d.manager)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">CC Lijst:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1 break-all">${escapeHtml(d.ccLijst)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 mt-1 pt-2">Score behaald:</div>
+        <div class="font-bold text-[#D32F2F] text-lg py-1 border-t border-slate-200 mt-1 pt-2">${escapeHtml(d.score)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">Norm / Eis:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">${escapeHtml(d.norm)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 mt-1 pt-2">Tijd Instelling:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 mt-1 pt-2">${escapeHtml(d.tijdInstelling)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">Tijd Deelnemer:</div>
+        <div class="font-medium text-slate-800 py-1 border-t border-slate-200 md:border-t-0 md:mt-0 mt-1 pt-2 md:pt-1">${escapeHtml(d.tijdDeelnemer)}</div>
+        
+        <div class="font-semibold text-slate-500 py-1 mt-2 border-t border-slate-200 pt-2">Eindresultaat:</div>
+        <div class="py-1 mt-2 border-t border-slate-200 pt-2">
+          <span class="inline-block px-3 py-1 rounded font-bold text-xs uppercase tracking-wide ${statusClass}">
+            ${escapeHtml(d.status)}
+          </span>
+        </div>
+        
+        ${detailsHtml}
+      </div>
+    `;
+    
+    document.getElementById('pb-row-modal-content').innerHTML = content;
+    document.getElementById('pb-row-modal').classList.remove('hidden');
+  }
+</script>

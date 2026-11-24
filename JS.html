@@ -1,0 +1,3405 @@
+<script>
+  window.onerror = function(msg, url, line) {
+    if (msg.indexOf('ResizeObserver') === -1) {
+      alert("Script Fout (Regel " + line + "): " + msg + "\n\nControleer of de code exact is gekopieerd zonder missende tekens.");
+    }
+    return false;
+  };
+
+  // =========================================================================
+  // HERBRUIKBARE MULTI-SELECT DROPDOWN COMPONENT (VOOR ALLE DASHBOARDS)
+  // =========================================================================
+  (function() {
+    function MultiSelect(config) {
+      this.container = typeof config.container === 'string' ? document.getElementById(config.container) : config.container;
+      if (!this.container) return;
+      
+      this.id = config.id || ('ms_' + Math.random().toString(36).substr(2, 9));
+      this.placeholder = config.placeholder || 'Alle';
+      this.allLabel = config.allLabel || 'Alle';
+      this.onChange = config.onChange || function() {};
+      this.styleType = config.styleType || 'boxed';
+      this.options = [];
+      this.selected = [];
+      this.isOpen = false;
+      
+      this.init();
+    }
+
+    MultiSelect.prototype.init = function() {
+      var self = this;
+      this.container.innerHTML = '';
+      this.container.classList.add('relative');
+
+      var btnClass = (this.styleType === 'underline') 
+        ? 'w-full border-b border-slate-300 pb-1 text-sm font-bold text-slate-700 bg-transparent flex items-center justify-between cursor-pointer focus:outline-none hover:border-[#D32F2F] transition-colors'
+        : (this.styleType === 'compact')
+          ? 'w-full border border-slate-300 p-2 rounded text-sm text-slate-700 bg-white flex items-center justify-between cursor-pointer focus:outline-none hover:border-[#D32F2F] transition-colors shadow-sm'
+          : 'w-full border border-slate-300 p-2.5 rounded font-bold text-sm text-slate-700 bg-white flex items-center justify-between cursor-pointer focus:outline-none hover:border-[#D32F2F] transition-colors shadow-sm';
+
+      this.hiddenInput = document.createElement('input');
+      this.hiddenInput.type = 'hidden';
+      this.hiddenInput.id = this.id;
+      this.container.appendChild(this.hiddenInput);
+
+      this.btn = document.createElement('button');
+      this.btn.type = 'button';
+      this.btn.className = btnClass;
+      
+      this.btnText = document.createElement('span');
+      this.btnText.className = 'truncate flex items-center gap-1.5 text-left';
+      this.btnText.innerText = this.placeholder;
+      this.btn.appendChild(this.btnText);
+
+      this.btnIcon = document.createElement('span');
+      this.btnIcon.className = 'material-icons text-slate-400 text-base transition-transform duration-200 shrink-0';
+      this.btnIcon.innerText = 'expand_more';
+      this.btn.appendChild(this.btnIcon);
+
+      this.container.appendChild(this.btn);
+
+      this.panel = document.createElement('div');
+      this.panel.className = 'hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-md shadow-2xl z-[9999] overflow-hidden min-w-[200px] max-w-[340px]';
+      
+      this.searchContainer = document.createElement('div');
+      this.searchContainer.className = 'p-2 border-b border-slate-100 flex items-center gap-1 bg-slate-50';
+      this.searchContainer.innerHTML = '<span class="material-icons text-slate-400 text-sm">search</span>';
+      
+      this.searchInput = document.createElement('input');
+      this.searchInput.type = 'text';
+      this.searchInput.placeholder = 'Zoeken...';
+      this.searchInput.className = 'w-full text-xs bg-transparent outline-none text-slate-700 font-normal';
+      this.searchContainer.appendChild(this.searchInput);
+      this.panel.appendChild(this.searchContainer);
+
+      var actionBar = document.createElement('div');
+      actionBar.className = 'flex justify-between items-center px-2.5 py-1.5 bg-slate-100 border-b border-slate-200 text-[11px] font-semibold text-slate-600';
+      
+      var btnSelectAll = document.createElement('button');
+      btnSelectAll.type = 'button';
+      btnSelectAll.className = 'text-blue-600 hover:text-blue-800 transition-colors font-medium';
+      btnSelectAll.innerText = 'Alles selecteren';
+      btnSelectAll.addEventListener('click', function(e) {
+        e.stopPropagation();
+        self.selectAll();
+      });
+
+      var btnClear = document.createElement('button');
+      btnClear.type = 'button';
+      btnClear.className = 'text-slate-500 hover:text-red-600 transition-colors font-medium';
+      btnClear.innerText = 'Wissen';
+      btnClear.addEventListener('click', function(e) {
+        e.stopPropagation();
+        self.clear();
+      });
+
+      actionBar.appendChild(btnSelectAll);
+      actionBar.appendChild(btnClear);
+      this.panel.appendChild(actionBar);
+
+      this.listContainer = document.createElement('div');
+      this.listContainer.className = 'max-h-52 overflow-y-auto custom-scrollbar p-1';
+      this.panel.appendChild(this.listContainer);
+
+      this.container.appendChild(this.panel);
+
+      this.btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        self.toggle();
+      });
+
+      this.searchInput.addEventListener('input', function() {
+        self.filterItems(this.value);
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!self.container.contains(e.target)) {
+          self.close();
+        }
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && self.isOpen) {
+          self.close();
+        }
+      });
+    };
+
+    MultiSelect.prototype.toggle = function() {
+      if (this.isOpen) {
+        this.close();
+      } else {
+        this.open();
+      }
+    };
+
+    MultiSelect.prototype.open = function() {
+      if (window.activeMultiSelect && window.activeMultiSelect !== this) {
+        window.activeMultiSelect.close();
+      }
+      this.panel.classList.remove('hidden');
+      this.btnIcon.style.transform = 'rotate(180deg)';
+      this.isOpen = true;
+      window.activeMultiSelect = this;
+      if (this.options.length > 5) {
+        this.searchInput.value = '';
+        this.filterItems('');
+        this.searchInput.focus();
+      }
+    };
+
+    MultiSelect.prototype.close = function() {
+      this.panel.classList.add('hidden');
+      this.btnIcon.style.transform = '';
+      this.isOpen = false;
+      if (window.activeMultiSelect === this) {
+        window.activeMultiSelect = null;
+      }
+    };
+
+    MultiSelect.prototype.setOptions = function(opts, selected, triggerChange) {
+      this.options = opts ? [...opts] : [];
+      if (Array.isArray(selected)) {
+        this.selected = selected.filter(s => this.options.indexOf(s) > -1);
+      } else if (typeof selected === 'string' && selected && selected !== 'Alle' && this.options.indexOf(selected) > -1) {
+        this.selected = [selected];
+      } else {
+        this.selected = [];
+      }
+      
+      this.searchContainer.style.display = this.options.length > 5 ? 'flex' : 'none';
+      
+      this.renderList();
+      this.updateButton();
+      
+      if (triggerChange) {
+        this.onChange(this.selected);
+      }
+    };
+
+    MultiSelect.prototype.renderList = function() {
+      var self = this;
+      this.listContainer.innerHTML = '';
+      
+      if (this.options.length === 0) {
+        var emptyEl = document.createElement('div');
+        emptyEl.className = 'py-3 text-center text-xs text-slate-400 italic';
+        emptyEl.innerText = 'Geen opties beschikbaar';
+        this.listContainer.appendChild(emptyEl);
+        return;
+      }
+
+      this.options.forEach(function(opt) {
+        var row = document.createElement('label');
+        row.className = 'flex items-center gap-2 px-2.5 py-1.5 hover:bg-slate-100 rounded cursor-pointer text-xs transition-colors select-none';
+        
+        var chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.className = 'accent-[#D32F2F] rounded cursor-pointer shrink-0';
+        chk.value = opt;
+        chk.checked = self.selected.indexOf(opt) > -1;
+
+        chk.addEventListener('change', function(e) {
+          e.stopPropagation();
+          if (this.checked) {
+            if (self.selected.indexOf(opt) === -1) self.selected.push(opt);
+          } else {
+            self.selected = self.selected.filter(function(v) { return v !== opt; });
+          }
+          self.updateButton();
+          self.onChange(self.selected);
+        });
+
+        var span = document.createElement('span');
+        span.className = 'truncate text-slate-700 font-medium';
+        span.innerText = opt;
+        span.title = opt;
+
+        row.appendChild(chk);
+        row.appendChild(span);
+        self.listContainer.appendChild(row);
+      });
+    };
+
+    MultiSelect.prototype.filterItems = function(query) {
+      var q = (query || '').toLowerCase().trim();
+      var labels = this.listContainer.querySelectorAll('label');
+      labels.forEach(function(label) {
+        var text = label.textContent.toLowerCase();
+        label.style.display = (q === '' || text.indexOf(q) > -1) ? 'flex' : 'none';
+      });
+    };
+
+    MultiSelect.prototype.selectAll = function() {
+      this.selected = [...this.options];
+      var chks = this.listContainer.querySelectorAll('input[type="checkbox"]');
+      chks.forEach(function(c) { c.checked = true; });
+      this.updateButton();
+      this.onChange(this.selected);
+    };
+
+    MultiSelect.prototype.clear = function() {
+      this.selected = [];
+      var chks = this.listContainer.querySelectorAll('input[type="checkbox"]');
+      chks.forEach(function(c) { c.checked = false; });
+      this.updateButton();
+      this.onChange(this.selected);
+    };
+
+    MultiSelect.prototype.getSelected = function() {
+      return [...this.selected];
+    };
+
+    MultiSelect.prototype.setSelected = function(sel, triggerChange) {
+      var self = this;
+      if (Array.isArray(sel)) {
+        this.selected = sel.filter(function(v) { return self.options.indexOf(v) > -1; });
+      } else {
+        this.selected = [];
+      }
+      var chks = this.listContainer.querySelectorAll('input[type="checkbox"]');
+      chks.forEach(function(c) {
+        c.checked = self.selected.indexOf(c.value) > -1;
+      });
+      this.updateButton();
+      if (triggerChange) {
+        this.onChange(this.selected);
+      }
+    };
+
+    MultiSelect.prototype.updateButton = function() {
+      if (this.selected.length === 0 || (this.options.length > 0 && this.selected.length === this.options.length)) {
+        this.btnText.innerHTML = `<span class="truncate font-semibold">${this.allLabel}</span>`;
+        this.hiddenInput.value = '';
+      } else if (this.selected.length === 1) {
+        this.btnText.innerHTML = `<span class="truncate font-semibold">${this.selected[0]}</span>`;
+        this.hiddenInput.value = this.selected[0];
+      } else {
+        this.btnText.innerHTML = `<span class="bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">${this.selected.length}</span> <span class="truncate font-semibold">${this.selected.length} geselecteerd</span>`;
+        this.hiddenInput.value = this.selected.join(', ');
+      }
+    };
+
+    window.MultiSelect = MultiSelect;
+  })();
+
+  var sidFromServer = "";
+  var mode = "BEHEER"; 
+  var tIdFromServer = "";
+  var userEmail = "";
+  var isAdminUser = false;
+  var canCreateUser = false; 
+  var originalUserEmail = ""; 
+  var isImpersonating = false;
+  var globalLogoUrl = "";
+  
+  var isAanvragerMode = false;
+  var isReviewMode = false;
+  var activeAanvraagId = null;
+
+  try {
+    if (typeof GLOBALS !== 'undefined') {
+      sidFromServer = GLOBALS.sidFromServer || "";
+      mode = GLOBALS.mode || "BEHEER";
+      tIdFromServer = GLOBALS.toetsIdFromServer || GLOBALS.tIdFromServer || "";
+      userEmail = GLOBALS.userEmail || "";
+      isAdminUser = (GLOBALS.isAdmin === true || GLOBALS.isAdmin === "true" || GLOBALS.isAdmin === 1);
+      originalUserEmail = userEmail;
+      globalLogoUrl = GLOBALS.logoUrl || "";
+    }
+  } catch(e) {}
+
+  var userEmailNaam = ""; 
+  var tests = []; 
+  var quiz = null; 
+  var quizAttemptToken = "";
+  var startTime = null; 
+  var finalResultData = null; 
+  var currentPDFBase64 = null;
+  var allResults = []; 
+  var currentFilteredResults = []; 
+  var editQuizData = null;
+  var DATA_CACHE = { stats: null, results: null, index: null, dropdowns: null };
+  var currentQuestionIndex = 0;
+  var sortCol = 'datum'; 
+  var sortAsc = false; 
+  var isGroupReport = false; 
+  var currentGroupPayload = null;
+
+  var quizTimerInterval = null;
+  var videoTimerInterval = null;
+  var ytPlayer = null;
+  var videoCompleted = false;
+  var quizHasVideo = false;
+
+  function unlockQuizStartButton() {
+    videoCompleted = true;
+    if (videoTimerInterval) clearInterval(videoTimerInterval);
+    var vCountdownText = document.getElementById('video-countdown-text');
+    var vCountdownIcon = document.getElementById('video-countdown-icon');
+    var vBox = document.getElementById('video-countdown-box');
+    var btnStartNow = document.getElementById('btn-start-now');
+
+    if (vCountdownText) vCountdownText.innerText = "Video voltooid! Je kunt nu aan de toets beginnen.";
+    if (vCountdownIcon) {
+      vCountdownIcon.innerText = "check_circle";
+      vCountdownIcon.classList.remove('text-[#D32F2F]');
+      vCountdownIcon.classList.add('text-green-600');
+    }
+    if (vBox) {
+      vBox.classList.remove('bg-slate-100');
+      vBox.classList.add('bg-green-50', 'text-green-800');
+    }
+    if (btnStartNow) {
+      btnStartNow.disabled = false;
+      btnStartNow.innerText = "START TOETS";
+      btnStartNow.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  }
+
+  function escapeHtmlValue(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function(character) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character];
+    });
+  }
+
+  function getEmbedVideoUrl(url) {
+    if (!url) return "";
+    var s = String(url).trim();
+
+    // 1. YouTube detectie (watch?v=, youtu.be/, embed/, shorts/)
+    var ytMatch = s.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
+    if (ytMatch && ytMatch[1]) {
+      return "https://www.youtube.com/embed/" + ytMatch[1] + "?rel=0&autoplay=0";
+    }
+
+    // 2. Google Drive detectie (file/d/ID of open?id=ID of uc?id=ID of 25+ tekens ID)
+    var driveMatch = s.match(/\/d\/([-\w]{25,})/i) || s.match(/[?&]id=([-\w]{25,})/i) || s.match(/([-\w]{25,})/);
+    if (driveMatch && driveMatch[1]) {
+      return "https://drive.google.com/file/d/" + driveMatch[1] + "/preview";
+    }
+
+    // 3. Indien al een embed url of overige url
+    if (s.indexOf("drive.google.com") > -1 && s.indexOf("/preview") === -1) {
+      return s.replace(/\/view(\?.*)?$/i, "/preview");
+    }
+
+    return s;
+  }
+  var quizTimerHidden = false;
+
+  function parseDetailsRobustly(raw) {
+    if (!raw) return [];
+    var p = raw;
+    if (typeof p === 'string') {
+      try { p = JSON.parse(p); } catch(e) {}
+    }
+    if (typeof p === 'string') {
+      try { p = JSON.parse(p); } catch(e) {}
+    }
+    return Array.isArray(p) ? p : [];
+  }
+
+  function getDriveThumbUrl(url) {
+    if (!url) return "";
+    var m = String(url).match(/[-\w]{25,}/);
+    if (m) {
+      return "https://lh3.googleusercontent.com/d/" + m[0];
+    }
+    return url;
+  }
+
+  function ld(s) { 
+    var loader = document.getElementById('loader') || document.getElementById('ldr');
+    if (loader) {
+      if (s) {
+        loader.classList.remove('hidden');
+      } else {
+        loader.classList.add('hidden');
+      }
+    }
+  }
+  
+  function showModal(m, confirm = false, action = null, isAutoClose = false) {
+    document.getElementById('modal-msg').innerText = m; 
+    document.getElementById('modal').classList.remove('hidden');
+    document.getElementById('modal').style.display = 'flex';
+    
+    var btnConfirm = document.getElementById('modal-confirm-btn');
+    var btnClose = document.querySelector('#modal button.btn-outline');
+    
+    if (confirm) { 
+      btnConfirm.classList.remove('hidden'); 
+      btnConfirm.onclick = action; 
+    } else { 
+      btnConfirm.classList.add('hidden'); 
+    }
+    
+    if (isAutoClose) {
+      if (btnClose) {
+        btnClose.style.display = 'none';
+      }
+      setTimeout(function() { 
+        closeModal(); 
+        if (btnClose) {
+          btnClose.style.display = ''; 
+        }
+      }, 3000);
+    } else {
+      if (btnClose) {
+        btnClose.style.display = '';
+      }
+    }
+  }
+
+  function closeModal() { 
+    document.getElementById('modal').classList.add('hidden'); 
+    document.getElementById('modal').style.display = 'none';
+  }
+
+  function toggleHelpDrawer() {
+     var drawer = document.getElementById('help-drawer');
+     var overlay = document.getElementById('help-drawer-overlay');
+     
+     if (!drawer || !overlay) return;
+     
+     if (drawer.classList.contains('translate-x-full')) {
+         overlay.classList.remove('hidden');
+         setTimeout(function() {
+            overlay.classList.remove('opacity-0');
+            drawer.classList.remove('translate-x-full');
+         }, 10);
+     } else {
+         drawer.classList.add('translate-x-full');
+         overlay.classList.add('opacity-0');
+         
+         setTimeout(function() {
+            overlay.classList.add('hidden');
+         }, 300);
+     }
+  }
+
+  function toggleMenu() {
+    var sidebar = document.getElementById('main-sidebar');
+    if (sidebar) sidebar.classList.toggle('open');
+  }
+
+  function toggleMaintenance() {
+    ld(true);
+    if (typeof google === 'undefined') {
+      setTimeout(function(){ ld(false); showModal("Preview: Onderhoudsmodus aangepast."); }, 500);
+      return;
+    }
+    
+    var btn = document.getElementById('text-maint');
+    var isCurrentlyOn = btn && btn.innerText.indexOf('AAN') > -1;
+    var newState = !isCurrentlyOn;
+    
+    google.script.run
+      .withSuccessHandler(function(state) {
+        var btnMaint = document.getElementById('btn-toggle-maint');
+        var iconMaint = btnMaint.querySelector('.material-icons');
+        var textMaint = document.getElementById('text-maint');
+
+        if (newState) {
+          btnMaint.className = "admin-only font-bold flex items-center gap-2 px-4 py-2 rounded transition-colors shadow-sm text-xs uppercase tracking-wider bg-red-600 text-white hover:bg-red-700";
+          iconMaint.innerText = "lock";
+          textMaint.innerText = "Onderhoud AAN";
+
+          let banner = document.getElementById('dynamic-maint-banner');
+          if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'dynamic-maint-banner';
+            banner.className = "bg-red-600 text-white text-center py-2 px-4 fixed left-0 right-0 z-[60] flex items-center justify-center gap-2 shadow-lg";
+            banner.style.top = "var(--header-height)";
+            banner.innerHTML = '<span class="material-icons animate-pulse text-[18px]">warning</span><span class="font-black uppercase tracking-widest text-[11px] sm:text-xs">Let op: Onderhoudsmodus is actief! Platform is gesloten voor kandidaten.</span>';
+            document.body.appendChild(banner);
+            
+            document.querySelector('.admin-content').style.setProperty('margin-top', 'calc(var(--header-height) + 36px)', 'important');
+            document.querySelector('.sidebar').style.setProperty('top', 'calc(var(--header-height) + 36px)', 'important');
+          }
+        } else {
+          btnMaint.className = "admin-only font-bold flex items-center gap-2 px-4 py-2 rounded transition-colors shadow-sm text-xs uppercase tracking-wider bg-white text-slate-600 border border-slate-300 hover:bg-slate-50";
+          iconMaint.innerText = "lock_open";
+          textMaint.innerText = "Onderhoud UIT";
+
+          let banner = document.getElementById('dynamic-maint-banner');
+          if (banner) {
+            banner.remove();
+            
+            document.querySelector('.admin-content').style.setProperty('margin-top', 'var(--header-height)', 'important');
+            document.querySelector('.sidebar').style.setProperty('top', 'var(--header-height)', 'important');
+          }
+        }
+        ld(false);
+      })
+      .withFailureHandler(function(err) {
+        ld(false);
+        showModal("Fout bij aanpassen onderhoudsmodus: " + err.message);
+      })
+      .toggleMaintenanceMode(newState);
+  }
+
+  function populateImpersonateDropdown() {
+    var select = document.getElementById('imp-email-select');
+    if (!select) return;
+    
+    if ((!tests || tests.length === 0) && typeof google !== 'undefined') {
+        ld(true);
+        select.innerHTML = '<option value="">-- Data ophalen... een moment geduld --</option>';
+        google.script.run
+            .withSuccessHandler(function(data) {
+                tests = data.tests ? data.tests : data;
+                DATA_CACHE.index = data;
+                buildDropdownOptions(select);
+                ld(false); 
+            })
+            .withFailureHandler(function(err) {
+                ld(false); 
+                showModal("Fout bij het ophalen van accounts: " + err.message);
+            })
+            .getToetsenOverzicht(originalUserEmail);
+        return;
+    } else {
+        buildDropdownOptions(select);
+        ld(false); 
+    }
+  }
+
+  function buildDropdownOptions(selectElement) {
+    if (!selectElement) return;
+    var emails = new Set();
+    
+    if (tests) {
+      tests.forEach(function(t) { 
+        if (t.managerEmail) {
+          var ems = String(t.managerEmail).split(/[\n,;]+/);
+          ems.forEach(function(e) {
+            if (e.trim().indexOf('@') > -1) {
+              emails.add(e.trim().toLowerCase());
+            }
+          });
+        } 
+      });
+    }
+    
+    var sorted = Array.from(emails).filter(Boolean).sort();
+    var options = '<option value="">-- Selecteer of typ... --</option>';
+    sorted.forEach(function(e) {
+      options += `<option value="${e}">${e}</option>`;
+    });
+    
+    var currentVal = selectElement.value;
+    selectElement.innerHTML = options;
+    if (currentVal && sorted.indexOf(currentVal) > -1) selectElement.value = currentVal;
+    if (isImpersonating && selectElement.id === 'imp-email-select') selectElement.value = userEmail;
+  }
+
+  function applyImpersonate() {
+    var val = document.getElementById('imp-email-select').value;
+    if (!val) return showModal("Selecteer een e-mailadres uit de lijst.");
+    
+    ld(true);
+    document.getElementById('imp-status-text').innerText = "Rechten controleren...";
+
+    if (typeof google !== 'undefined') {
+        google.script.run
+            .withSuccessHandler(function(data) {
+                var rights = {
+                    isAdmin: data.isAdmin,
+                    canCreate: data.canCreate
+                };
+                
+                userEmail = val;
+                isImpersonating = true;
+                isAdminUser = rights.isAdmin;
+                canCreateUser = rights.canCreate;
+                
+                document.getElementById('header-user-email').innerHTML = `<span class="text-[#D32F2F] font-black">${userEmail}</span>`;
+                document.getElementById('header-stop-imp').classList.remove('hidden');
+                document.getElementById('imp-status-box').classList.remove('hidden');
+                document.getElementById('imp-status-text').innerText = "Je kijkt nu mee als: " + userEmail;
+                
+                var roleText = isAdminUser ? "BEHEERDER" : (canCreateUser ? "TOETSENMAKER" : "MANAGER");
+                document.getElementById('header-user-role').innerText = roleText;
+
+                document.querySelectorAll('.admin-only').forEach(function(el) { el.classList.remove('hidden'); });
+                
+                if (isAdminUser || canCreateUser) {
+                    var sendLink = document.getElementById('link-send');
+                    if (sendLink) sendLink.classList.remove('hidden');
+                    var indexLink = document.getElementById('link-index');
+                    if (indexLink) indexLink.classList.remove('hidden');
+                    
+                    if (isAdminUser) {
+                        var importLink = document.getElementById('link-import');
+                        if (importLink) importLink.classList.remove('hidden');
+                    }
+                    
+                    var impLink = document.getElementById('link-impersonate');
+                    if (impLink) impLink.classList.add('hidden'); 
+                    
+                    if (!isAdminUser) {
+                        ['link-aanvragen-wachtrij', 'link-gebruikers', 'link-shared-accounts', 'link-logs', 'link-import'].forEach(function(id) {
+                            var el = document.getElementById(id);
+                            if (el) el.classList.add('hidden');
+                        });
+                        var maintBtn = document.getElementById('btn-toggle-maint');
+                        if (maintBtn) maintBtn.classList.add('hidden');
+                    }
+                } else {
+                    document.querySelectorAll('.admin-only').forEach(function(el) { el.classList.add('hidden'); });
+                    var sendLink = document.getElementById('link-send');
+                    if (sendLink) sendLink.classList.add('hidden');
+                    var impLink = document.getElementById('link-impersonate');
+                    if (impLink) impLink.classList.add('hidden');
+                }
+                
+                showModal("Je kijkt nu mee als: " + userEmail + "\nHuidige rol: " + roleText, false, null, true);
+                
+                DATA_CACHE = { stats: null, results: null, index: null, dropdowns: null };
+                if (typeof pbDataRaw !== 'undefined') pbDataRaw = null; 
+                
+                show('dashboard', document.getElementById('link-dashboard'));
+                ld(false);
+            })
+            .withFailureHandler(function(err) {
+                ld(false);
+                showModal("Fout bij ophalen rechten voor impersonate: " + err.message);
+            })
+            .getToetsenOverzicht(val);
+    }
+  }
+
+  function stopImpersonate() {
+    userEmail = originalUserEmail;
+    isImpersonating = false;
+    isAdminUser = GLOBALS.isAdmin; 
+    
+    document.getElementById('header-user-email').innerHTML = userEmail;
+    document.getElementById('header-user-role').innerText = "BEHEERDER";
+    document.getElementById('header-stop-imp').classList.add('hidden');
+    
+    document.querySelectorAll('.admin-only').forEach(function(el) { el.classList.remove('hidden'); });
+    var sendLink = document.getElementById('link-send');
+    if (sendLink) sendLink.classList.remove('hidden');
+    var indexLink = document.getElementById('link-index');
+    if (indexLink) indexLink.classList.remove('hidden');
+    var importLink = document.getElementById('link-import');
+    if (importLink) importLink.classList.remove('hidden');
+    var maintBtn = document.getElementById('btn-toggle-maint');
+    if (maintBtn) maintBtn.classList.remove('hidden');
+    
+    var select = document.getElementById('imp-email-select');
+    if (select) select.value = "";
+    document.getElementById('imp-status-box').classList.add('hidden');
+    
+    showModal("Impersonate gestopt. Je bent weer jezelf.", false, null, true);
+    
+    DATA_CACHE = { stats: null, results: null, index: null, dropdowns: null };
+    if (typeof pbDataRaw !== 'undefined') pbDataRaw = null; 
+    
+    show('dashboard', document.getElementById('link-dashboard'));
+  }
+
+  function loadGebruikers() {
+    ld(true);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        renderGebruikers(res);
+        ld(false);
+      })
+      .withFailureHandler(function(err) {
+        ld(false);
+        showModal("Fout bij laden gebruikers: " + err.message);
+      })
+      .getGebruikers();
+  }
+
+  function renderGebruikers(users) {
+    var tb = document.getElementById('table-gebruikers');
+    if(!tb) return;
+    tb.innerHTML = "";
+    users.forEach(function(u) {
+      tb.innerHTML += `
+      <tr>
+        <td class="font-bold text-sm text-slate-800">${u.email}</td>
+        <td><span class="status-badge status-new">${u.rol}</span></td>
+        <td class="text-right">
+          <button onclick="askDeleteGebruiker('${u.email}')" class="text-slate-400 hover:text-[#D32F2F] ml-2" title="Gebruiker Verwijderen"><span class="material-icons text-lg">delete</span></button>
+        </td>
+      </tr>`;
+    });
+  }
+
+  function openAddGebruiker() {
+    var select = document.getElementById('inp-user-email');
+    if (select) {
+        select.innerHTML = '<option value="">-- Laden... --</option>';
+        if ((!tests || tests.length === 0) && typeof google !== 'undefined') {
+            google.script.run
+                .withSuccessHandler(function(data) {
+                    tests = data.tests ? data.tests : data;
+                    DATA_CACHE.index = data;
+                    buildDropdownOptions(select);
+                })
+                .getToetsenOverzicht(originalUserEmail);
+        } else {
+            buildDropdownOptions(select);
+        }
+    }
+    document.getElementById('modal-add-user').classList.remove('hidden');
+    document.getElementById('modal-add-user').style.display = 'flex';
+  }
+
+  function closeAddGebruiker() {
+    document.getElementById('modal-add-user').classList.add('hidden');
+    document.getElementById('modal-add-user').style.display = 'none';
+  }
+
+  function saveNieuweGebruiker() {
+    var email = document.getElementById('inp-user-email').value;
+    var rol = document.getElementById('inp-user-rol').value;
+    if(!email || email.indexOf('@') === -1) return showModal("Selecteer of typ een geldig e-mailadres in.");
+
+    closeAddGebruiker();
+    ld(true);
+    google.script.run
+      .withSuccessHandler(function() {
+         loadGebruikers();
+      })
+      .withFailureHandler(function(err) {
+         ld(false);
+         showModal("Fout bij toevoegen: " + err.message);
+      })
+      .saveGebruiker(email, rol);
+  }
+
+  function askDeleteGebruiker(email) {
+    showModal(`Weet je zeker dat je '${email}' al zijn/haar globale rechten (inclusief Toetsen aanmaken) wilt ontnemen?`, true, function() {
+      closeModal();
+      ld(true);
+      google.script.run
+        .withSuccessHandler(function() {
+           loadGebruikers();
+        })
+        .withFailureHandler(function(err) {
+           ld(false);
+           showModal("Fout bij verwijderen: " + err.message);
+        })
+        .deleteGebruiker(email);
+    });
+  }
+  
+  function loadSharedAccounts() {
+    ld(true);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        renderSharedAccounts(res);
+        ld(false);
+      })
+      .withFailureHandler(function(err) {
+        ld(false);
+        showModal("Fout bij laden gedeelde accounts: " + err.message);
+      })
+      .getSharedAccounts();
+  }
+
+  function renderSharedAccounts(accounts) {
+    var tb = document.getElementById('table-shared-accounts');
+    if(!tb) return;
+    tb.innerHTML = "";
+    accounts.forEach(function(a) {
+      tb.innerHTML += `
+      <tr>
+        <td data-label="UNIT" class="text-sm">${a.unit}</td>
+        <td data-label="KP" class="text-sm">${a.kp}</td>
+        <td data-label="BUSINESSUNIT" class="text-sm">${a.bu}</td>
+        <td data-label="REGIO" class="text-sm">${a.regio}</td>
+        <td data-label="E-MAILADRES" class="font-bold text-sm text-slate-800">${a.email}</td>
+        <td data-label="ACTIES" class="text-right">
+          <button onclick="askDeleteSharedAccount('${a.email}')" class="text-slate-400 hover:text-[#D32F2F] ml-2" title="Account Verwijderen"><span class="material-icons text-lg">delete</span></button>
+        </td>
+      </tr>`;
+    });
+  }
+
+  function openAddSharedAccount() {
+    document.getElementById('inp-sa-unit').value = "";
+    document.getElementById('inp-sa-kp').value = "";
+    document.getElementById('inp-sa-bu').value = "";
+    document.getElementById('inp-sa-regio').value = "";
+    document.getElementById('inp-sa-email').value = "";
+    document.getElementById('modal-add-shared-account').classList.remove('hidden');
+    document.getElementById('modal-add-shared-account').style.display = 'flex';
+  }
+
+  function closeAddSharedAccount() {
+    document.getElementById('modal-add-shared-account').classList.add('hidden');
+    document.getElementById('modal-add-shared-account').style.display = 'none';
+  }
+
+  function saveNieuwSharedAccount() {
+    var acc = {
+      unit: document.getElementById('inp-sa-unit').value,
+      kp: document.getElementById('inp-sa-kp').value,
+      bu: document.getElementById('inp-sa-bu').value,
+      regio: document.getElementById('inp-sa-regio').value,
+      email: document.getElementById('inp-sa-email').value
+    };
+    if(!acc.email || acc.email.indexOf('@') === -1) return showModal("Vul een geldig e-mailadres in.");
+
+    closeAddSharedAccount();
+    ld(true);
+    google.script.run
+      .withSuccessHandler(function() {
+         loadSharedAccounts();
+      })
+      .withFailureHandler(function(err) {
+         ld(false);
+         showModal("Fout bij opslaan: " + err.message);
+      })
+      .saveSharedAccount(acc);
+  }
+
+  function askDeleteSharedAccount(email) {
+    showModal(`Weet je zeker dat je het gedeelde account '${email}' wilt verwijderen uit de database?`, true, function() {
+      closeModal();
+      ld(true);
+      google.script.run
+        .withSuccessHandler(function() {
+           loadSharedAccounts();
+        })
+        .withFailureHandler(function(err) {
+           ld(false);
+           showModal("Fout bij verwijderen: " + err.message);
+        })
+        .deleteSharedAccount(email);
+    });
+  }
+
+  function show(v, el) {
+    if (window.innerWidth <= 768) {
+      var sidebar = document.getElementById('main-sidebar');
+      if (sidebar) sidebar.classList.remove('open');
+    }
+    
+    if (v === 'dashboard' && !isAdminUser && !canCreateUser && (!tests || tests.length === 0) && !isImpersonating) {
+      v = 'aanvrager-dash';
+    }
+    
+    var views = ['dashboard','powerbi','index','import','send','results','editor','handleiding','logs', 'impersonate', 'gebruikers', 'shared-accounts', 'aanvragen-wachtrij', 'aanvrager-dash'];
+    
+    views.forEach(function(x) {
+      var viewEl = document.getElementById('view-' + x);
+      if (viewEl) { 
+        viewEl.classList.add('hidden'); 
+        viewEl.style.display = 'none'; 
+      }
+      var linkEl = document.getElementById('link-' + x);
+      if (linkEl) {
+        linkEl.classList.remove('active');
+      }
+    });
+
+    var targetEl = document.getElementById('view-' + v);
+    if (targetEl) { 
+      targetEl.classList.remove('hidden'); 
+      targetEl.style.display = 'block'; 
+    }
+    
+    if (el) {
+      el.classList.add('active');
+    }
+    
+    if (v == 'impersonate') {
+      populateImpersonateDropdown();
+    } else if (v == 'gebruikers') {
+      loadGebruikers();
+    } else if (v == 'shared-accounts') {
+      loadSharedAccounts();
+    } else if (v == 'dashboard' && typeof lDash === 'function') { 
+      lDash(false); 
+    } else if (v == 'powerbi' && typeof loadPowerBIData === 'function') { 
+      loadPowerBIData(false); 
+    } else if ((v == 'index' || v == 'send') && typeof lTests === 'function') { 
+      lTests(false); 
+    } else if (v == 'results' && typeof loadResults === 'function') { 
+      loadResults(false); 
+    } else if (v == 'logs') { 
+      loadAuditLogs(); 
+    } else if (v == 'aanvragen-wachtrij') {
+      loadAanvragenWachtrij();
+    }
+  }
+
+  function initializeApp() {
+    var copyYearEl = document.getElementById('copy-year');
+    if (copyYearEl) {
+      copyYearEl.innerText = new Date().getFullYear();
+    }
+    
+    canCreateUser = isAdminUser;
+
+    setInterval(function() {
+      if (mode === "BEHEER") {
+        var vDash = document.getElementById('view-dashboard');
+        var vPbi = document.getElementById('view-powerbi');
+        var vRes = document.getElementById('view-results');
+        var vInd = document.getElementById('view-index');
+        var vEdi = document.getElementById('view-editor');
+        
+        if (vEdi && !vEdi.classList.contains('hidden')) {
+          return;
+        }
+        
+        if (vDash && !vDash.classList.contains('hidden') && typeof lDash === 'function') {
+          lDash(true, true);
+        } else if (vPbi && !vPbi.classList.contains('hidden') && typeof loadPowerBIData === 'function') {
+          loadPowerBIData(true, true);
+        } else if (vRes && !vRes.classList.contains('hidden') && typeof loadResults === 'function') {
+          loadResults(true, true);
+        } else if (vInd && !vInd.classList.contains('hidden') && typeof lTests === 'function') {
+          lTests(true, true);
+        }
+      }
+    }, 60000);
+
+    setInterval(function() {
+      if (mode === "BEHEER" && isAdminUser && !isImpersonating && typeof google !== 'undefined') {
+        google.script.run
+          .withSuccessHandler(function(d) {
+             if (d && d.pendingCount !== undefined) {
+                 var badge = document.getElementById('badge-aanvragen');
+                 if (badge) {
+                     if (d.pendingCount > 0) {
+                         badge.innerText = d.pendingCount;
+                         badge.classList.remove('hidden');
+                     } else {
+                         badge.classList.add('hidden');
+                     }
+                 }
+             }
+          })
+          .getToetsenOverzicht(originalUserEmail);
+          
+        var vWachtrij = document.getElementById('view-aanvragen-wachtrij');
+        if (vWachtrij && !vWachtrij.classList.contains('hidden') && typeof loadAanvragenWachtrij === 'function') {
+            loadAanvragenWachtrij(true); 
+        }
+      }
+    }, 120000);
+
+    if (mode === "TOETS" && tIdFromServer) {
+      if (typeof google === 'undefined') { 
+        ld(false); 
+        showModal("Preview: Toets modus geladen."); 
+        return; 
+      }
+      
+      if (!google.script || !google.script.run) {
+         setTimeout(initializeApp, 100);
+         return;
+      }
+      
+      google.script.run
+        .withSuccessHandler(function(d) {
+          if (d && d.meta && d.vragen) {
+            quiz = d;
+            quizAttemptToken = d.attemptToken || "";
+            var qTitle = document.getElementById('q-title');
+            if (qTitle) qTitle.innerText = d.meta.naam;
+            
+            var maxTijdNum = parseFloat(d.meta.maxTijd) || 0;
+            var maxTijdTekst = maxTijdNum > 0 ? maxTijdNum + " minuut/minuten" : "Geen limiet";
+
+            var qMetaInfo = document.getElementById('q-meta-info');
+            if (qMetaInfo) qMetaInfo.innerHTML = "Minimale Score: " + d.meta.norm + "%<br>Toegestane tijd: " + maxTijdTekst;
+            
+            var btnStartNow = document.getElementById('btn-start-now');
+            
+            var mainTitle = document.getElementById('q-main-title');
+            if (mainTitle) {
+              mainTitle.innerText = "KLAAR VOOR DE START";
+            }
+            
+            // Controleer of de toets een instructievideo heeft
+            var rawVideoUrl = (d.meta.videoUrl || "").trim();
+            var videoDuurSec = parseInt(d.meta.videoDuur, 10) || 0;
+            var vContainer = document.getElementById('quiz-video-container');
+            var vIframe = document.getElementById('quiz-video-iframe');
+            var ytContainer = document.getElementById('quiz-video-player');
+            var vCountdownText = document.getElementById('video-countdown-text');
+            var vCountdownIcon = document.getElementById('video-countdown-icon');
+            var vBox = document.getElementById('video-countdown-box');
+            
+            if (rawVideoUrl && vContainer) {
+              quizHasVideo = true;
+              videoCompleted = false;
+              vContainer.classList.remove('hidden');
+
+              // Knop ALTIJD direct vergrendelen
+              if (btnStartNow) {
+                btnStartNow.disabled = true;
+                btnStartNow.innerText = "BEKIJK EERST DE VIDEO";
+                btnStartNow.classList.add('opacity-50', 'cursor-not-allowed');
+              }
+              
+              var ytMatch = rawVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/i);
+              if (ytMatch && ytMatch[1]) {
+                // YouTube video: koppel aan de YouTube IFrame Player API
+                var ytId = ytMatch[1];
+                if (vIframe) vIframe.classList.add('hidden');
+                if (ytContainer) ytContainer.classList.remove('hidden');
+
+                if (vCountdownText) vCountdownText.innerText = "Bekijk de YouTube video hierboven. Zodra de video is afgespeeld ontgrendelt de toets!";
+
+                var initYTPlayer = function() {
+                  if (typeof YT !== 'undefined' && YT.Player) {
+                    if (ytPlayer && ytPlayer.destroy) {
+                      try { ytPlayer.destroy(); } catch(e) {}
+                    }
+                    ytPlayer = new YT.Player('quiz-video-player', {
+                      videoId: ytId,
+                      playerVars: {
+                        rel: 0,
+                        modestbranding: 1
+                      },
+                      events: {
+                        'onStateChange': function(ev) {
+                          // ev.data === 0 betekent YT.PlayerState.ENDED
+                          if (ev.data === 0 || (typeof YT !== 'undefined' && ev.data === YT.PlayerState.ENDED)) {
+                            unlockQuizStartButton();
+                          }
+                        }
+                      }
+                    });
+                  } else {
+                    setTimeout(initYTPlayer, 250);
+                  }
+                };
+                initYTPlayer();
+
+                // Indien er tevens een duur is opgegeven, telt een timer mee als visuele indicatie of fallback
+                if (videoDuurSec > 0) {
+                  var secLeft = videoDuurSec;
+                  var updateCountdown = function() {
+                    if (videoCompleted) return;
+                    if (secLeft <= 0) {
+                      unlockQuizStartButton();
+                    } else {
+                      var minPart = Math.floor(secLeft / 60);
+                      var secPart = secLeft % 60;
+                      var timeStr = (minPart > 0 ? minPart + "m " : "") + (secPart < 10 && minPart > 0 ? "0" : "") + secPart + "s";
+                      if (vCountdownText && !videoCompleted) {
+                        vCountdownText.innerText = "Video bekijken... (knop ontgrendelt over " + timeStr + " of bij einde video)";
+                      }
+                      secLeft--;
+                    }
+                  };
+                  updateCountdown();
+                  if (videoTimerInterval) clearInterval(videoTimerInterval);
+                  videoTimerInterval = setInterval(updateCountdown, 1000);
+                }
+              } else {
+                // Google Drive of andere embed video
+                if (ytContainer) ytContainer.classList.add('hidden');
+                if (vIframe) {
+                  vIframe.classList.remove('hidden');
+                  vIframe.src = getEmbedVideoUrl(rawVideoUrl);
+                }
+
+                // Als speelduur is ingevuld: gebruik de exacte duur. Zo niet: hanteer minimaal 60 sec
+                var secLeft = videoDuurSec > 0 ? videoDuurSec : 60;
+                var updateVideoCountdown = function() {
+                  if (videoCompleted) return;
+                  if (secLeft <= 0) {
+                    unlockQuizStartButton();
+                  } else {
+                    var minPart = Math.floor(secLeft / 60);
+                    var secPart = secLeft % 60;
+                    var timeStr = (minPart > 0 ? minPart + "m " : "") + (secPart < 10 && minPart > 0 ? "0" : "") + secPart + "s";
+                    if (vCountdownText) vCountdownText.innerText = "Toets starten ontgrendelt over: " + timeStr;
+                    secLeft--;
+                  }
+                };
+                updateVideoCountdown();
+                if (videoTimerInterval) clearInterval(videoTimerInterval);
+                videoTimerInterval = setInterval(updateVideoCountdown, 1000);
+              }
+            } else {
+              quizHasVideo = false;
+              videoCompleted = true;
+              if (vContainer) vContainer.classList.add('hidden');
+              if (btnStartNow) {
+                btnStartNow.disabled = false;
+                btnStartNow.innerText = "START TOETS";
+                btnStartNow.classList.remove('opacity-50', 'cursor-not-allowed');
+              }
+            }
+          } else { 
+            console.error("Fout: Ongeldige return data van getQuizData", d);
+            showModal("Toets kon niet geladen worden. De link is ongeldig of de data ontbreekt."); 
+          }
+          ld(false);
+        })
+        .withFailureHandler(function(err) { 
+          ld(false); 
+          console.error("Fout bij laden toets:", err);
+          showModal("Fout bij laden: " + String(err.message||err).replace(/^Exception:\s*/i, "").trim()); 
+        })
+        .getQuizData(tIdFromServer, sidFromServer);
+        
+    } else if (mode === "BEHEER") { 
+      if (typeof google !== 'undefined') {
+        google.script.run.checkEnVerstuurHerinneringen();
+      }
+      
+      ld(true);
+      if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler(function(d) {
+                DATA_CACHE.index = d.tests ? d.tests : d; 
+                tests = d.tests ? d.tests : d; 
+                if (d.isAdmin !== undefined) isAdminUser = d.isAdmin;
+                canCreateUser = d.canCreate !== undefined ? d.canCreate : isAdminUser;
+                
+                if (d.userEmail && !isImpersonating) {
+                    userEmail = d.userEmail;
+                    var emailEl = document.getElementById('header-user-email');
+                    if (emailEl) emailEl.innerHTML = userEmail;
+                }
+                
+                var roleText = isAdminUser ? "BEHEERDER" : (canCreateUser ? "TOETSENMAKER" : "AANVRAGER / MANAGER");
+                if (isImpersonating) roleText = "GEBRUIKER / MANAGER";
+                var roleEl = document.getElementById('header-user-role');
+                if (roleEl) roleEl.innerText = roleText;
+                
+                if (isAdminUser) {
+                    document.querySelectorAll('.admin-only').forEach(function(el) { el.classList.remove('hidden'); });
+                } else if (!isImpersonating) {
+                    if (canCreateUser) {
+                        document.querySelectorAll('.admin-only').forEach(function(el) { el.classList.remove('hidden'); });
+                        ['link-aanvragen-wachtrij', 'link-gebruikers', 'link-shared-accounts', 'link-impersonate', 'link-logs', 'link-import'].forEach(function(id) {
+                            var el = document.getElementById(id);
+                            if (el) el.classList.add('hidden');
+                        });
+                    } else {
+                        document.querySelectorAll('.admin-only').forEach(function(el) { el.classList.add('hidden'); });
+                        var sendLink = document.getElementById('link-send');
+                        if (sendLink) sendLink.classList.add('hidden');
+                        var indexLink = document.getElementById('link-index');
+                        if (indexLink) indexLink.classList.add('hidden');
+                        var importLink = document.getElementById('link-import');
+                        if (importLink) importLink.classList.add('hidden');
+                    }
+                }
+                
+                if (isAdminUser && d.pendingCount !== undefined) {
+                    var badge = document.getElementById('badge-aanvragen');
+                    if (badge) {
+                        if (d.pendingCount > 0) {
+                            badge.innerText = d.pendingCount;
+                            badge.classList.remove('hidden');
+                        } else {
+                            badge.classList.add('hidden');
+                        }
+                    }
+                }
+                
+                if (!isAdminUser && !canCreateUser && tests.length === 0 && !isImpersonating) {
+                    var sb = document.getElementById('main-sidebar');
+                    if (sb) sb.style.display = 'flex'; 
+                    var cnt = document.querySelector('.admin-content');
+                    if (cnt) cnt.style.marginLeft = ''; 
+                    
+                    show('aanvrager-dash');
+                    
+                    setTimeout(function() {
+                        var cLijst = document.getElementById('concepten-lijst');
+                        if (cLijst) cLijst.classList.remove('hidden');
+                        loadConceptenLijst();
+                    }, 100);
+
+                } else {
+                    var sb = document.getElementById('main-sidebar');
+                    if (sb) sb.style.display = 'flex';
+                    var cnt = document.querySelector('.admin-content');
+                    if (cnt) cnt.style.marginLeft = '';
+                    
+                    show('dashboard', document.getElementById('link-dashboard'));
+                }
+                ld(false);
+            })
+            .withFailureHandler(function(err) {
+                show('dashboard', document.getElementById('link-dashboard'));
+                ld(false);
+            })
+            .getToetsenOverzicht(userEmail);
+      } else {
+          var roleEl = document.getElementById('header-user-role');
+          if (roleEl) roleEl.innerText = "BEHEERDER (PREVIEW)";
+          var sb = document.getElementById('main-sidebar');
+          if (sb) sb.style.display = 'flex';
+          show('dashboard', document.getElementById('link-dashboard'));
+          ld(false);
+      }
+    } else { 
+      ld(false); 
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initializeApp();
+  } else {
+    window.addEventListener('DOMContentLoaded', initializeApp);
+  }
+
+  function lDash(force, silent) {
+    if (typeof silent === 'undefined') silent = false;
+    
+    if (!force && DATA_CACHE.stats) { 
+      renderStats(DATA_CACHE.stats); 
+      if (!silent) {
+        ld(false); 
+      }
+      return; 
+    }
+    
+    if (!silent) {
+      ld(true); 
+    }
+    
+    if (typeof google === 'undefined') { 
+      setTimeout(function() { 
+        renderStats({totaal:0, bezig:0, verwerkt:0, recent:[]}); 
+        if (!silent) {
+          ld(false); 
+        }
+      }, 500); 
+      return; 
+    }
+
+    var isManualRefresh = (force && !silent);
+    
+    google.script.run
+      .withSuccessHandler(function(d) { 
+        DATA_CACHE.stats = d; 
+        renderStats(d); 
+        if (!silent) {
+          ld(false); 
+        }
+      })
+      .withFailureHandler(function(err) { 
+        if (!silent) { 
+          ld(false); 
+          showModal("Fout bij laden dashboard: " + err.message); 
+        } 
+      })
+      .getDashboardData(userEmail, isManualRefresh);
+  }
+
+  function filterDashboard() { 
+    if (DATA_CACHE.stats) {
+      renderStats(DATA_CACHE.stats); 
+    }
+  }
+
+  function renderStats(d) {
+    var isNew = d && d.all && d.perToets;
+    
+    if (!window.dashMultiSelect && document.getElementById('dash-filter-toets-container') && typeof MultiSelect !== 'undefined') {
+      window.dashMultiSelect = new MultiSelect({
+        container: 'dash-filter-toets-container',
+        id: 'dash-filter-toets',
+        placeholder: 'Alle Toetsen',
+        allLabel: 'Alle Toetsen',
+        styleType: 'boxed',
+        onChange: function() { filterDashboard(); }
+      });
+    }
+
+    if (window.dashMultiSelect && isNew) {
+      var keys = Object.keys(d.perToets).sort();
+      var currentSel = window.dashMultiSelect.getSelected();
+      window.dashMultiSelect.setOptions(keys, currentSel, false);
+    } else if (!window.dashMultiSelect) {
+      var sel = document.getElementById('dash-filter-toets');
+      if (sel && isNew) {
+        var c = sel.value; 
+        var keys = Object.keys(d.perToets).sort();
+        sel.innerHTML = '<option value="">Alle Toetsen</option>' + keys.map(function(k) { return `<option value="${k}">${k}</option>`; }).join('');
+        if (keys.indexOf(c) > -1) {
+          sel.value = c;
+        }
+      }
+    }
+    
+    var selectedToetsen = window.dashMultiSelect ? window.dashMultiSelect.getSelected() : [];
+    if (selectedToetsen.length === 0 && document.getElementById('dash-filter-toets') && document.getElementById('dash-filter-toets').value) {
+      selectedToetsen = [document.getElementById('dash-filter-toets').value];
+    }
+
+    var stats;
+    var allKeys = (isNew && d.perToets) ? Object.keys(d.perToets) : [];
+    if (isNew && selectedToetsen.length > 0 && selectedToetsen.length < allKeys.length) {
+      stats = { totaal: 0, bezig: 0, verwerkt: 0, geslaagd: 0, gezakt: 0 };
+      selectedToetsen.forEach(function(k) {
+        if (d.perToets[k]) {
+          stats.totaal += d.perToets[k].totaal || 0;
+          stats.bezig += d.perToets[k].bezig || 0;
+          stats.verwerkt += d.perToets[k].verwerkt || 0;
+          stats.geslaagd += d.perToets[k].geslaagd || 0;
+          stats.gezakt += d.perToets[k].gezakt || 0;
+        }
+      });
+    } else {
+      stats = isNew ? d.all : d;
+    }
+    
+    var elTot = document.getElementById('stat-tot'); 
+    if (elTot) { elTot.innerText = stats.totaal || 0; }
+    
+    var elBez = document.getElementById('stat-bez'); 
+    if (elBez) { elBez.innerText = stats.bezig || 0; }
+    
+    var elDone = document.getElementById('stat-done'); 
+    if (elDone) { elDone.innerText = stats.verwerkt || 0; }
+    
+    var tot = stats.verwerkt > 0 ? stats.verwerkt : 0;
+    var pGes = tot > 0 ? Math.round((stats.geslaagd / tot) * 100) : 0;
+    var pGez = tot > 0 ? Math.round((stats.gezakt / tot) * 100) : 0;
+    
+    var elGesCount = document.getElementById('chart-geslaagd-count'); 
+    if (elGesCount) { elGesCount.innerText = stats.geslaagd || 0; }
+    
+    var elGesCamp = document.getElementById('chart-geslaagd-perc'); 
+    if (elGesCamp) { elGesCamp.innerText = pGes + '%'; }
+    
+    var elGesBar = document.getElementById('chart-geslaagd-bar'); 
+    if (elGesBar) { elGesBar.style.width = pGes + '%'; }
+    
+    var elGezCount = document.getElementById('chart-gezakt-count'); 
+    if (elGezCount) { elGezCount.innerText = stats.gezakt || 0; }
+    
+    var elGezCamp = document.getElementById('chart-gezakt-perc'); 
+    if (elGezCamp) { elGezCamp.innerText = pGez + '%'; }
+    
+    var elGezBar = document.getElementById('chart-gezakt-bar'); 
+    if (elGezBar) { elGezBar.style.width = pGez + '%'; }
+  }
+
+  function loadResults(force, silent) {
+    if (typeof silent === 'undefined') silent = false;
+    if (!force && DATA_CACHE.results) { 
+      allResults = DATA_CACHE.results; 
+      filterResults(); 
+      renderReportToetsDropdown(); 
+      if (!silent) ld(false); 
+      return; 
+    }
+    
+    if (!silent) ld(true);
+    
+    if (typeof google === 'undefined') { 
+      setTimeout(function() { if (!silent) ld(false); }, 500); 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(data) { 
+        DATA_CACHE.results = data; 
+        allResults = data; 
+        
+        if (!window.resMultiSelect && document.getElementById('res-filter-quiz-container') && typeof MultiSelect !== 'undefined') {
+          window.resMultiSelect = new MultiSelect({
+            container: 'res-filter-quiz-container',
+            id: 'res-filter-quiz',
+            placeholder: 'Alle Toetsen',
+            allLabel: 'Alle Toetsen',
+            styleType: 'compact',
+            onChange: function() { filterResults(); }
+          });
+        }
+
+        var uniqueNames = [];
+        for (var i=0; i<data.length; i++) {
+           if (uniqueNames.indexOf(data[i].toetsNaam) === -1) uniqueNames.push(data[i].toetsNaam);
+        }
+        uniqueNames.sort();
+
+        if (window.resMultiSelect) {
+          var curSel = window.resMultiSelect.getSelected();
+          window.resMultiSelect.setOptions(uniqueNames, curSel, false);
+        } else {
+          var filterQuiz = document.getElementById('res-filter-quiz');
+          if (filterQuiz) {
+            filterQuiz.innerHTML = '<option value="">Alle Toetsen</option>' + uniqueNames.map(function(n) { return `<option value="${n}">${n}</option>`; }).join(''); 
+          }
+        }
+        
+        filterResults(); 
+        renderReportToetsDropdown(); 
+        if (!silent) ld(false); 
+      })
+      .withFailureHandler(function(err) { 
+        if (!silent) {
+          ld(false); 
+          showModal("Fout bij laden resultaten: " + err.message); 
+        }
+      })
+      .getAllResultsData(userEmail);
+  }
+
+  function sortTable(col) {
+    sortAsc = (sortCol === col) ? !sortAsc : ((col === 'email' || col === 'toetsNaam' || col === 'status') ? true : false);
+    sortCol = col;
+    
+    ['datum','email','toetsNaam','score','norm','status'].forEach(function(c) {
+      var el = document.getElementById('sort-icon-'+c);
+      if (el) { 
+        el.innerText = (c === sortCol) ? (sortAsc ? 'arrow_upward' : 'arrow_downward') : 'unfold_more'; 
+        if (c === sortCol) { el.classList.add('text-[#D32F2F]'); } else { el.classList.remove('text-[#D32F2F]'); }
+      }
+    });
+    
+    filterResults();
+  }
+
+  function filterResults() {
+    var selectedToetsen = window.resMultiSelect ? window.resMultiSelect.getSelected() : [];
+    if (selectedToetsen.length === 0 && document.getElementById('res-filter-quiz') && document.getElementById('res-filter-quiz').value) {
+      selectedToetsen = [document.getElementById('res-filter-quiz').value];
+    }
+    var dStart = document.getElementById('res-filter-date-start').value;
+    var dEnd = document.getElementById('res-filter-date-end').value;
+    
+    var sEl = document.getElementById('res-filter-search');
+    var sVal = sEl ? sEl.value.toLowerCase() : "";
+    
+    var curr = allResults.filter(function(r) {
+      return (selectedToetsen.length === 0 || selectedToetsen.indexOf(r.toetsNaam) > -1) && 
+             (!dStart || r.datum >= dStart) && 
+             (!dEnd || r.datum <= dEnd) &&
+             (!sVal || r.email.toLowerCase().indexOf(sVal) > -1);
+    });
+    
+    curr.sort(function(a, b) {
+      var vA = (sortCol === 'datum') ? (a.datumIso ? new Date(a.datumIso).getTime() : 0) : ((sortCol === 'score' || sortCol === 'norm') ? parseFloat(a[sortCol])||0 : String(a[sortCol]||"").toLowerCase());
+      var vB = (sortCol === 'datum') ? (b.datumIso ? new Date(b.datumIso).getTime() : 0) : ((sortCol === 'score' || sortCol === 'norm') ? parseFloat(b[sortCol])||0 : String(b[sortCol]||"").toLowerCase());
+      
+      if (vA === vB && sortCol === 'datum') { 
+        vA = a.id; 
+        vB = b.id; 
+      }
+      
+      if (vA < vB) return sortAsc ? -1 : 1; 
+      if (vA > vB) return sortAsc ? 1 : -1; 
+      return 0;
+    });
+
+    currentFilteredResults = curr;
+    
+    var tb = document.getElementById('table-results-all'); 
+    if (tb) {
+      tb.innerHTML = "";
+      curr.forEach(function(r, idx) {
+        var c = r.status.indexOf('Geslaagd') > -1 ? 'status-done' : 'status-error';
+        
+        var deleteBtn = (!isImpersonating && r.canDelete) ? `<button onclick="askDeleteResult(${r.id})" class="text-slate-400 hover:text-red-600 ml-2" title="Resultaat definitief verwijderen"><span class="material-icons text-lg">delete</span></button>` : '';
+        var editBtn = (!isImpersonating && (isAdminUser || canCreateUser)) ? `<button onclick="askEditResult(${r.id})" class="text-slate-400 hover:text-blue-600 ml-2" title="Status (Score) Handmatig Aanpassen / Revert to Gezakt"><span class="material-icons text-lg">edit</span></button>` : '';
+        
+        var hasRightsToResend = isAdminUser || canCreateUser;
+        var herkansingBtn = (!isImpersonating && hasRightsToResend && r.status.indexOf('Gezakt') > -1 && r.status.indexOf('toegewezen') === -1) ? `<button onclick="askHerkansing(${r.id})" class="text-slate-400 hover:text-orange-500 ml-2" title="Nieuwe Herkansing Toewijzen"><span class="material-icons text-lg">replay</span></button>` : '';
+        
+        tb.innerHTML += `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td data-label="DATUM" class="text-xs whitespace-nowrap">${escapeHtmlValue(r.displayDatum)}</td>
+          <td data-label="DEELNEMER" class="font-bold text-sm">${escapeHtmlValue(r.email)}</td>
+          <td data-label="TOETS" class="text-sm">${escapeHtmlValue(r.toetsNaam)}</td>
+          <td data-label="SCORE" class="font-bold">${escapeHtmlValue(r.score)}%</td>
+          <td data-label="NORM">${escapeHtmlValue(r.norm)}%</td>
+          <td data-label="STATUS"><span class="status-badge ${c}">${escapeHtmlValue(r.status)}</span></td>
+          <td data-label="ACTIES" style="text-align: right;">
+            <div class="flex items-center justify-end gap-2 mt-2 md:mt-0">
+              <button onclick="handlePDFRequest(${r.id})" class="text-[#D32F2F] hover:text-[#b71c1c]">
+                <span class="material-icons text-lg">description</span>
+              </button>
+              ${herkansingBtn}
+              ${editBtn}
+              ${deleteBtn}
+            </div>
+          </td>
+        </tr>`;
+      });
+    }
+  }
+
+  function askHerkansing(id) {
+    var r = allResults.find(function(x) { return x.id === id; });
+    if (!r) return;
+    
+    showModal(`Weet je zeker dat je kandidaat ${r.email} een nieuwe poging (herkansing) wilt sturen voor '${r.toetsNaam}'? De kandidaat ontvangt direct een nieuwe e-mail.`, true, function() {
+      closeModal();
+      ld(true);
+      
+      var reqData = {
+        email: r.email,
+        toetsId: r.toetsId,
+        sid: r.sid,
+        toetsNaam: r.toetsNaam
+      };
+      
+      if (typeof google !== 'undefined') {
+        google.script.run
+          .withSuccessHandler(function(res) {
+            DATA_CACHE.results = null;
+            loadResults(true);
+            showModal(res.message, false, null, true);
+          })
+          .withFailureHandler(function(err) {
+            ld(false);
+            showModal("Fout bij versturen herkansing: " + err.message);
+          })
+          .stuurHerkansing(reqData);
+      }
+    });
+  }
+
+  function exportCSV() {
+    var selectedToetsen = window.resMultiSelect ? window.resMultiSelect.getSelected() : [];
+    var qVal = selectedToetsen.length === 1 ? selectedToetsen[0] : (document.getElementById('res-filter-quiz') ? document.getElementById('res-filter-quiz').value : "");
+    var dStart = document.getElementById('res-filter-date-start') ? document.getElementById('res-filter-date-start').value : "";
+    var dEnd = document.getElementById('res-filter-date-end') ? document.getElementById('res-filter-date-end').value : "";
+    var sEl = document.getElementById('res-filter-search');
+    var sVal = sEl ? sEl.value.trim() : "";
+    
+    var curr = (currentFilteredResults && currentFilteredResults.length > 0) ? currentFilteredResults : [];
+    
+    if (curr.length === 0 && selectedToetsen.length === 0 && !qVal && !dStart && !dEnd && !sVal) {
+      curr = allResults;
+    }
+    
+    if (!curr || curr.length === 0) {
+      return showModal("Geen resultaten om te exporteren voor de gekozen selectie.");
+    }
+    
+    var csvContent = "Datum,E-mailadres,Toets,Score,Norm,Status\n"; 
+    curr.forEach(function(r) { 
+      var safeDate = r.displayDatum ? String(r.displayDatum).replace(/"/g, '""') : (r.datum || '');
+      var safeEmail = r.email ? String(r.email).replace(/"/g, '""') : '';
+      var safeToetsNaam = r.toetsNaam ? String(r.toetsNaam).replace(/"/g, '""') : '';
+      var safeStatus = r.status ? String(r.status).replace(/"/g, '""') : '';
+      csvContent += `"${safeDate}","${safeEmail}","${safeToetsNaam}",${r.score}%,${r.norm}%,"${safeStatus}"\n`; 
+    });
+    
+    var blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" }); 
+    var link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob); 
+    if (selectedToetsen.length === 1) {
+      link.download = "Resultaten_" + selectedToetsen[0].replace(/[\\/:*?"<>| ]/g, "_") + ".csv";
+    } else if (selectedToetsen.length > 1) {
+      link.download = "Resultaten_Geselecteerd_" + selectedToetsen.length + "_Toetsen.csv";
+    } else if (qVal) {
+      link.download = "Resultaten_" + qVal.replace(/[\\/:*?"<>| ]/g, "_") + ".csv";
+    } else {
+      link.download = "Resultaten_Export.csv"; 
+    }
+    link.click();
+  }
+
+  function exportNogTeDoen() {
+    var selectedToetsen = window.resMultiSelect ? window.resMultiSelect.getSelected() : [];
+    var filterNaam = selectedToetsen.length > 0 ? selectedToetsen : (document.getElementById('res-filter-quiz') ? document.getElementById('res-filter-quiz').value : "");
+    
+    showModal("Google Spreadsheet wordt aangemaakt op de achtergrond. Een moment geduld...", false, null, false);
+    
+    if (typeof google !== 'undefined') {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.success) {
+            closeModal();
+            window.open(res.url, '_blank');
+          } else {
+            showModal("Fout bij export: " + res.message);
+          }
+        })
+        .withFailureHandler(function(err) {
+          showModal("Fout: " + err.message);
+        })
+        .exportNogTeDoenSheet(filterNaam, userEmail);
+    }
+  }
+
+  function renderReportToetsDropdown() {
+    var s = document.getElementById('gr-toets'); 
+    if(!s) return;
+    
+    var optionsHtml = '<option value="">-- Kies een toets --</option>';
+    var uniqueNames = [];
+    allResults.forEach(function(r) {
+      if (r.toetsNaam && uniqueNames.indexOf(r.toetsNaam) === -1) uniqueNames.push(r.toetsNaam);
+    });
+    
+    uniqueNames.sort().forEach(function(t) { 
+      optionsHtml += `<option value="${t}">${t}</option>`; 
+    });
+    
+    s.innerHTML = optionsHtml;
+  }
+
+  function updateReportEmailDropdown() {
+    var t = document.getElementById('gr-toets').value;
+    var c = document.getElementById('gr-email-container'); 
+    
+    if(!c) return;
+    if(!t) { 
+      c.innerHTML = '<div class="text-xs text-slate-400 italic">Kies een toets...</div>'; 
+      return; 
+    }
+    
+    var checkboxHtml = `
+      <label class="flex items-center space-x-2 p-2 border-b border-slate-200 mb-1 hover:bg-slate-100 cursor-pointer font-bold text-[#D32F2F]">
+        <input type="checkbox" id="gr-email-select-all" onclick="toggleAllReportEmails(this)" checked>
+        <span>Alles selecteren / deselecteren</span>
+      </label>
+    `;
+      
+    var uniqueEmails = [];
+    allResults.forEach(function(r) {
+      if (r.toetsNaam === t && r.email && uniqueEmails.indexOf(r.email) === -1) uniqueEmails.push(r.email);
+    });
+    
+    uniqueEmails.sort().forEach(function(e) {
+      checkboxHtml += `
+      <label class="flex items-center space-x-2 p-1 hover:bg-slate-100 cursor-pointer">
+        <input type="checkbox" value="${e}" class="gr-email-cb" checked>
+        <span>${e}</span>
+      </label>`;
+    });
+    
+    c.innerHTML = checkboxHtml;
+  }
+
+  function toggleAllReportEmails(source) {
+    var checkboxes = document.querySelectorAll('.gr-email-cb');
+    checkboxes.forEach(function(cb) {
+      cb.checked = source.checked;
+    });
+  }
+
+  function openGroupReportModal() { 
+    document.getElementById('group-report-modal').classList.remove('hidden'); 
+    document.getElementById('group-report-modal').style.display = 'flex';
+  }
+  
+  function closeGroupReportModal() { 
+    document.getElementById('group-report-modal').classList.add('hidden'); 
+    document.getElementById('group-report-modal').style.display = 'none';
+  }
+
+  function generateGroupReport() {
+    var t = document.getElementById('gr-toets').value;
+    var ems = Array.from(document.querySelectorAll('.gr-email-cb:checked')).map(function(cb) { return cb.value; });
+    
+    if (!t) {
+      return showModal("Selecteer eerst een toets.");
+    }
+    if (ems.length === 0) {
+      return showModal("Selecteer minimaal één deelnemer om het rapport te genereren.");
+    }
+    
+    var dStart = document.getElementById('gr-start').value;
+    var dEnd = document.getElementById('gr-end').value;
+    
+    var reportData = allResults.filter(function(r) { 
+      return r.toetsNaam === t && (ems.indexOf(r.email) > -1) && (!dStart || r.datum >= dStart) && (!dEnd || r.datum <= dEnd); 
+    });
+    
+    if (reportData.length === 0) {
+      return showModal("Geen data gevonden.");
+    }
+    
+    var qStats = {};
+    reportData.forEach(function(r) {
+      var det = parseDetailsRobustly(r.details);
+      det.forEach(function(q) {
+        if (!qStats[q.question]) {
+          qStats[q.question] = { question: q.question, total: 0, incorrect: 0 };
+        }
+        qStats[q.question].total++; 
+        
+        if (!q.isCorrect) {
+          qStats[q.question].incorrect++;
+        }
+      });
+    });
+    
+    closeGroupReportModal(); 
+    ld(true); 
+    
+    var badQuestions = Object.values(qStats).filter(function(q) { return q.incorrect > 0; }).sort(function(a, b) { return b.incorrect - a.incorrect; });
+    var payload = { 
+      toets: t, 
+      email: ems.join(', '), 
+      start: dStart, 
+      end: dEnd, 
+      results: reportData, 
+      questionStats: badQuestions 
+    };
+    
+    if (typeof google === 'undefined') { 
+      setTimeout(function() { ld(false); showModal("Preview: Rapport gegenereerd."); }, 500); 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(res) {
+        ld(false); 
+        currentPDFBase64 = res.base64; 
+        isGroupReport = true; 
+        currentGroupPayload = payload;
+        renderGroupHTMLPreview(payload); 
+        document.getElementById('pdf-modal').classList.remove('hidden');
+        document.getElementById('pdf-modal').style.display = 'flex';
+      })
+      .withFailureHandler(function(err) { 
+        ld(false); 
+        showModal("Fout bij genereren: " + err.message); 
+      })
+      .getGroupReportPDFBase64(payload);
+  }
+
+  function handlePDFRequest(id) {
+    isGroupReport = false;
+    var r = null;
+    for(var i=0; i<allResults.length; i++) {
+       if (allResults[i].id === id) { r = allResults[i]; break; }
+    }
+    if (!r) return;
+
+    finalResultData = {
+      userEmail: r.email,
+      toetsNaam: r.toetsNaam,
+      norm: r.norm,
+      datum: r.displayDatum,
+      score: r.score,
+      correct: r.correct,
+      total: r.total,
+      finalStatus: r.status,
+      toetsId: r.toetsId,
+      details: parseDetailsRobustly(r.details)
+    };
+
+    renderHTMLPreview(finalResultData);
+    document.getElementById('pdf-modal').classList.remove('hidden');
+    document.getElementById('pdf-modal').style.display = 'flex';
+    currentPDFBase64 = null;
+  }
+
+  function renderHTMLPreview(d) {
+    var c = d.finalStatus.indexOf('Geslaagd') > -1 ? '#2E7D32' : '#D32F2F';
+    var logoUrl = globalLogoUrl || "https://lh3.googleusercontent.com/d/1OFSDHFxHGqg8EKcLu8qtRtqSRiXwl89c";
+    
+    var rows = "";
+    if (d.details && d.details.length > 0) {
+      rows = d.details.map(function(q) {
+        var resKleurBg = q.isCorrect ? '#F0FDF4' : '#FEF2F2'; 
+        var resBorder = q.isCorrect ? '#bbf7d0' : '#fecaca';
+        var correctHtml = q.isCorrect ? '' : `<br><b style="color:#D32F2F;font-size:12px;">Correct: ${escapeHtmlValue(q.correctAnswer)}</b>`;
+        var uitlegHtml = q.uitleg ? `<div style="margin-top: 10px; font-size: 13px; color: #475569; font-style: italic; background-color: rgba(255,255,255,0.5); padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0;"><b>Uitleg:</b> ${escapeHtmlValue(q.uitleg)}</div>` : '';
+        
+        return `
+        <div style="background-color: ${resKleurBg}; border: 1px solid ${resBorder}; padding: 15px; margin-bottom: 10px; border-radius: 6px; text-align: left;">
+          <b style="color: #232323;">${escapeHtmlValue(q.question)}</b><br>
+          <span style="font-size: 14px; color: #475569;">Jouw antwoord: ${escapeHtmlValue(q.givenAnswer)}</span>
+          ${correctHtml}
+          ${uitlegHtml}
+        </div>`;
+      }).join('');
+    } else {
+      rows = '<p style="text-align: center; color: #666; font-style: italic;">Geen foutenanalyse beschikbaar voor dit resultaat.</p>';
+    }
+    
+    document.getElementById('pdf-preview-content').innerHTML = `
+      <div style="background:white; padding:40px; border-radius:8px; width:100%; max-width: 800px; margin: 0 auto; box-sizing: border-box;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px; border-bottom: 2px solid #D32F2F; padding-bottom: 15px;">
+          <tr>
+            <td style="vertical-align: top;">
+              <h1 style="color:#232323; margin:0 0 5px 0;">RESULTAAT TOETS</h1>
+              <p style="margin:0;"><b>Kandidaat:</b> ${escapeHtmlValue(d.userEmail)}<br><b>Toets:</b> ${escapeHtmlValue(d.toetsNaam)}<br><b>Datum:</b> ${escapeHtmlValue(d.datum || '-')}<br><b>Minimale score:</b> ${escapeHtmlValue(d.norm || '-')}%</p>
+            </td>
+            <td style="text-align: right; vertical-align: top;">
+              <img src="${logoUrl}" alt="G4S Logo" style="height: 50px;">
+            </td>
+          </tr>
+        </table>
+        <div style="background:#f4f6f9; padding:25px; text-align:center; margin-bottom: 20px;">
+          <h1 style="font-size:50px; color:${c}; margin:0;">${escapeHtmlValue(d.score)}%</h1>
+          <p style="color:${c}; font-weight:bold; font-size:18px;">${escapeHtmlValue(d.finalStatus)}</p>
+        </div>
+        ${rows}
+      </div>`;
+  }
+
+  function renderGroupHTMLPreview(d) {
+    var ges = d.results.filter(function(r) { return r.status === 'Geslaagd'; }).length; 
+    var gez = d.results.length - ges;
+    var logoUrl = globalLogoUrl || "https://lh3.googleusercontent.com/d/1OFSDHFxHGqg8EKcLu8qtRtqSRiXwl89c";
+    
+    var resultTableRows = "";
+    if (d.results && d.results.length > 0) {
+      resultTableRows = '<table width="100%" cellpadding="8" cellspacing="0" border="0" style="margin-bottom: 20px; font-size: 12px; border-collapse: collapse; text-align: left;">' +
+        '<thead><tr style="background-color: #f4f6f9; border-bottom: 2px solid #e2e8f0; color: #475569;">' +
+        '<th>Datum</th><th>Deelnemer</th><th>Score</th><th>Resultaat</th>' +
+        '</tr></thead><tbody>';
+
+      for (var j = 0; j < d.results.length; j++) {
+        var r = d.results[j];
+        var resKleur = r.status.indexOf('Geslaagd') > -1 ? '#15803D' : '#D32F2F';
+        var resDatum = r.displayDatum || r.datum || '-';
+        resultTableRows += '<tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid;">' +
+          '<td style="padding: 8px;">' + escapeHtmlValue(resDatum) + '</td>' +
+          '<td style="padding: 8px;">' + escapeHtmlValue(r.email || '-') + '</td>' +
+          '<td style="padding: 8px;">' + escapeHtmlValue(r.score || '-') + '%</td>' +
+          '<td style="padding: 8px; color: ' + resKleur + '; font-weight: bold;">' + escapeHtmlValue(r.status || '-') + '</td>' +
+          '</tr>';
+      }
+      resultTableRows += '</tbody></table>';
+    } else {
+      resultTableRows = '<p style="font-size: 13px; color: #666; font-style: italic;">Geen resultaten gevonden.</p>';
+    }
+
+    var badQuestionsHtml = "";
+    if (d.questionStats && d.questionStats.length > 0) {
+      badQuestionsHtml = d.questionStats.map(function(q) {
+        var percFout = Math.round((q.incorrect / q.total) * 100);
+        return `
+        <div style="background-color: #FEF2F2; border: 1px solid #fecaca; padding: 15px; margin-bottom: 10px; border-radius: 6px; text-align: left; page-break-inside: avoid;">
+          <b style="color: #232323;">${escapeHtmlValue(q.question)}</b><br>
+          <span style="font-size: 14px; color: #D32F2F; font-weight: bold;">${escapeHtmlValue(q.incorrect)} keer fout beantwoord (${escapeHtmlValue(percFout)}% van totaal)</span>
+        </div>`;
+      }).join('');
+    } else {
+      badQuestionsHtml = '<div style="padding:15px; text-align:center; font-style:italic; color:#666;">Geen fouten gemaakt in deze selectie.</div>';
+    }
+
+    document.getElementById('pdf-preview-content').innerHTML = `
+      <div style="background:white; padding:40px; border-radius:8px; width:100%; max-width: 800px; margin: 0 auto; box-sizing: border-box;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px; border-bottom: 2px solid #D32F2F; padding-bottom: 15px;">
+          <tr>
+            <td style="vertical-align: top;">
+              <h1 style="color:#232323; margin:0 0 5px 0;">GROEPSRAPPORT TOETS</h1>
+              <p style="margin:0;"><b>Toets:</b> ${escapeHtmlValue(d.toets)}</p>
+            </td>
+            <td style="text-align: right; vertical-align: top;">
+              <img src="${logoUrl}" alt="G4S Logo" style="height: 50px;">
+            </td>
+          </tr>
+        </table>
+        <div style="background:#f4f6f9; padding:25px; text-align:center; margin-bottom: 20px;">
+          <p style="font-size: 16px;">Totaal: <b>${d.results.length}</b> | Geslaagd: <b style="color:#2E7D32;">${ges}</b> | Gezakt: <b style="color:#D32F2F;">${gez}</b></p>
+        </div>
+        <h3 style="color:#232323; margin-top:10px; margin-bottom: 15px; font-size: 16px;">Resultaten Overzicht</h3>
+        ${resultTableRows}
+        <h3 style="color:#232323; margin-top:30px; margin-bottom: 15px; font-size: 16px;">Foutenanalyse (Vaakst fout beantwoord)</h3>
+        ${badQuestionsHtml}
+      </div>`;
+  }
+
+  function closePDF() { 
+    document.getElementById('pdf-modal').classList.add('hidden'); 
+    document.getElementById('pdf-modal').style.display = 'none';
+  }
+
+  function downloadActualPDF() { 
+    if (!currentPDFBase64 && !isGroupReport) { 
+      ld(true); 
+      if (typeof google === 'undefined') { 
+        setTimeout(function() { ld(false); showModal("Preview: PDF gedownload."); }, 500); 
+        return; 
+      }
+      
+      google.script.run.withSuccessHandler(function(r) { 
+        ld(false); 
+        currentPDFBase64 = r.base64; 
+        triggerDL(); 
+      }).getPDFBase64(finalResultData); 
+      return; 
+    } 
+    triggerDL(); 
+  }
+
+  function triggerDL() { 
+    var l = document.createElement('a'); 
+    l.href = 'data:application/pdf;base64,' + currentPDFBase64; 
+    l.download = "Rapport.pdf"; 
+    l.click(); 
+  }
+
+  function printActualPDF() { 
+    if (!currentPDFBase64 && !isGroupReport) { 
+      ld(true); 
+      if (typeof google === 'undefined') { 
+        setTimeout(function() { ld(false); showModal("Preview: PDF afgedrukt."); }, 500); 
+        return; 
+      }
+      google.script.run.withSuccessHandler(function(r) { 
+        ld(false); 
+        currentPDFBase64 = r.base64; 
+        triggerPr(); 
+      }).getPDFBase64(finalResultData); 
+      return; 
+    } 
+    triggerPr(); 
+  }
+
+  function triggerPr() { 
+    var b = new Blob([new Uint8Array(atob(currentPDFBase64).split('').map(function(c){ return c.charCodeAt(0); }))], {type:'application/pdf'}); 
+    window.open(URL.createObjectURL(b), '_blank'); 
+  }
+
+  function askConfirmEmail() { 
+    showModal("Rapport verzenden?", true, function() { 
+      closeModal(); 
+      emailCurrentPDF(); 
+    }); 
+  }
+
+  function emailCurrentPDF() { 
+    if (typeof google === 'undefined') {
+      showModal("E-mail verzenden is alleen beschikbaar in de Apps Script-webapp.");
+      return;
+    }
+
+    showModal("Rapport wordt per e-mail verzonden...", false);
+    
+    if (isGroupReport) { 
+      google.script.run
+        .withSuccessHandler(function() {
+          showModal("Groepsrapport is per e-mail verzonden.");
+        })
+        .withFailureHandler(function(err) {
+          showModal("Groepsrapport verzenden mislukt: " + err.message);
+        })
+        .sendGroupPDFEmail(currentGroupPayload, userEmail);
+    } else { 
+      google.script.run
+        .withSuccessHandler(function() {
+          showModal("Rapport is per e-mail verzonden.");
+        })
+        .withFailureHandler(function(err) {
+          showModal("Rapport verzenden mislukt: " + err.message);
+        })
+        .sendPDFEmail(finalResultData);
+    } 
+  }
+
+  function lTests(force, silent) {
+    if (typeof silent === 'undefined') silent = false;
+    if (!force && DATA_CACHE.index) { 
+      tests = DATA_CACHE.index; 
+      renderIndex(); 
+      if (!silent) ld(false); 
+      return; 
+    }
+    
+    if (!silent) ld(true); 
+    if (typeof google === 'undefined') { 
+      setTimeout(function() { tests = []; renderIndex(); if (!silent) ld(false); }, 500); 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(d) { 
+        DATA_CACHE.index = d.tests ? d.tests : d; 
+        tests = d.tests ? d.tests : d; 
+        
+        canCreateUser = d.canCreate !== undefined ? d.canCreate : isAdminUser;
+        
+        renderIndex(); 
+        if (!silent) ld(false); 
+      })
+      .withFailureHandler(function(err) { 
+        if (!silent) {
+          ld(false); 
+          showModal("Fout bij laden toetsen: " + err.message); 
+        }
+      })
+      .getToetsenOverzicht(userEmail);
+  }
+
+  function renderIndex() {
+    var btnNew = document.getElementById('btn-new-quiz');
+    if (btnNew) {
+      btnNew.style.display = canCreateUser ? 'flex' : 'none';
+    }
+
+    var tb = document.getElementById('table-index'); 
+    tb.innerHTML = "";
+    
+    var sel = document.getElementById('send-toets'); 
+    if (sel) {
+      sel.innerHTML = '<option value="">-- Kies een toets --</option>';
+    }
+    
+    tests.forEach(function(t) {
+      var adminDeleteBtn = isAdminUser ? `<button class="btn-outline text-xs border-red-200 text-red-600 hover:bg-red-50 ml-2" onclick="askDeleteToets('${t.id}', '${t.naam.replace(/'/g,"\\'")}')" title="Toets Verwijderen"><span class="material-icons text-[14px]">delete_forever</span></button>` : '';
+      
+      var videoBadge = t.hasVideo 
+        ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200" title="Instructievideo gekoppeld"><span class="material-icons text-[14px] text-amber-600">videocam</span> Ja</span>` 
+        : `<span class="text-slate-400 text-xs font-medium">-</span>`;
+
+      tb.innerHTML += `
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td data-label="NAAM" class="font-bold">${t.naam}</td>
+        <td data-label="MANAGER">${t.managerName||'-'}</td>
+        <td data-label="NORM">${t.norm}%</td>
+        <td data-label="VRAGEN">${t.vragen_totaal}</td>
+        <td data-label="VIDEO" style="text-align:center;">${videoBadge}</td>
+        <td data-label="ACTIES" style="text-align:right; white-space:nowrap;">
+          <div class="flex items-center justify-start md:justify-end mt-2 md:mt-0">
+            <button class="btn-outline text-xs font-bold" onclick="loadEditor('${t.id}')">BEWERK</button>
+            ${adminDeleteBtn}
+          </div>
+        </td>
+      </tr>`;
+      
+      if (sel) {
+        sel.innerHTML += `<option value="${t.id}">${t.naam}</option>`;
+      }
+    });
+  }
+
+  function askDeleteToets(id, naam) {
+    showModal(`Weet je zeker dat je de toets '${naam}' en alle bijbehorende vragen definitief wilt verwijderen?`, true, function() {
+      closeModal(); 
+      ld(true);
+      
+      if (typeof google === 'undefined') { 
+        setTimeout(function() { ld(false); showModal("Preview: Toets verwijderd."); }, 500); 
+        return; 
+      }
+      
+      google.script.run
+        .withSuccessHandler(function() { 
+          DATA_CACHE.index = null; 
+          lTests(true); 
+          showModal("Toets definitief verwijderd.", false, null, true); 
+        })
+        .withFailureHandler(function(err) { 
+          ld(false); 
+          showModal("Fout bij verwijderen toets: " + err.message); 
+        })
+        .deleteToets(id);
+    });
+  }
+
+  function askDeleteResult(id) {
+    var res = null;
+    for (var i=0; i<allResults.length; i++) {
+      if (allResults[i].id === id) { res = allResults[i]; break; }
+    }
+    if (!res) return;
+    
+    showModal(`Weet je zeker dat je het resultaat van ${res.email} wilt verwijderen? Dit kan niet ongedaan worden gemaakt.`, true, function() {
+      closeModal(); 
+      ld(true);
+      
+      google.script.run
+        .withSuccessHandler(function() { 
+          DATA_CACHE.results = null; 
+          loadResults(true); 
+          showModal("Resultaat verwijderd.", false, null, true); 
+        })
+        .withFailureHandler(function(err) { 
+          ld(false); 
+          showModal("Fout: " + err.message); 
+        })
+        .deleteResult(res);
+    });
+  }
+
+  function askEditResult(id) {
+    var r = allResults.find(function(x) { return x.id === id; });
+    if (!r) return;
+    
+    var isGezakt = r.status.indexOf('Gezakt') > -1;
+    var promptMsg = "";
+    
+    if (isGezakt) {
+       promptMsg = `Resultaat aanpassen voor ${r.email}. Huidige status is: GEZAKT.\n\nKlik op 'Bevestigen' om dit handmatig te wijzigen naar GESLAAGD.`;
+       showModal(promptMsg, true, function() {
+          closeModal();
+          showModal("Wordt op de achtergrond aangepast naar Geslaagd...", false, null, true);
+          r.status = 'Geslaagd';
+          filterResults();
+          if (typeof google !== 'undefined') {
+            google.script.run.updateResultaatStatus(r.toetsId, r.email, r.sid, 'Geslaagd');
+          }
+       });
+    } else {
+       promptMsg = `Resultaat aanpassen voor ${r.email}. Huidige status is: ${r.status.toUpperCase()}.\n\nKies de nieuwe status door op de knop te klikken:`;
+       
+       document.getElementById('modal-msg').innerText = promptMsg; 
+       document.getElementById('modal').classList.remove('hidden');
+       document.getElementById('modal').style.display = 'flex';
+       
+       var btnConfirm = document.getElementById('modal-confirm-btn');
+       var btnClose = document.querySelector('#modal button.btn-outline');
+       
+       btnConfirm.classList.remove('hidden');
+       btnConfirm.innerText = "Zet op GEZAKT";
+       btnConfirm.onclick = function() {
+           closeModal();
+           btnConfirm.innerText = "Bevestigen"; 
+           showModal("Wordt op de achtergrond aangepast naar Gezakt...", false, null, true);
+           r.status = 'Gezakt';
+           filterResults();
+           if (typeof google !== 'undefined') {
+             google.script.run.updateResultaatStatus(r.toetsId, r.email, r.sid, 'Gezakt');
+           }
+       };
+       
+       if (btnClose) {
+         btnClose.style.display = '';
+         btnClose.innerText = "Annuleren";
+         btnClose.onclick = function() {
+            closeModal();
+            btnClose.innerText = "Sluiten"; 
+         };
+       }
+    }
+  }
+
+  function loadAuditLogs() {
+    ld(true);
+    google.script.run
+      .withSuccessHandler(function(logs) {
+        var tb = document.getElementById('table-logs');
+        var html = '';
+        logs.forEach(function(l) { 
+          html += `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td data-label="DATUM" class="text-xs">${l.datum}</td>
+            <td data-label="GEBRUIKER" class="text-xs font-bold">${l.user}</td>
+            <td data-label="ACTIE"><span class="status-badge status-new text-[10px]">${l.actie}</span></td>
+            <td data-label="DETAILS" class="text-xs">${l.details}</td>
+          </tr>`; 
+        });
+        tb.innerHTML = html; 
+        ld(false);
+      })
+      .withFailureHandler(function(err) { 
+        ld(false); 
+        showModal("Fout bij laden logs: " + err.message); 
+      })
+      .getAuditLogs();
+  }
+
+  function cancelEditor() {
+    var wasReview = isReviewMode;
+    var wasAanvrager = isAanvragerMode;
+    isAanvragerMode = false;
+    isReviewMode = false;
+    activeAanvraagId = null;
+    
+    document.getElementById('editor-review-bar').classList.add('hidden');
+    document.getElementById('editor-page-title').innerText = "Toets Editor";
+    document.getElementById('editor-page-sub').innerText = "Maak of bewerk vragen en instellingen";
+    
+    if (!isAdminUser && !canCreateUser && tests.length === 0 && !isImpersonating) {
+        show('aanvrager-dash');
+        if (wasAanvrager) {
+            document.getElementById('concepten-lijst').classList.remove('hidden');
+            loadConceptenLijst();
+        }
+    } else if (wasReview) {
+        show('aanvragen-wachtrij', document.getElementById('link-aanvragen-wachtrij'));
+    } else {
+        show('index', document.getElementById('link-index'));
+    }
+  }
+
+  function createNewQuiz() { 
+    ld(true); 
+    isAanvragerMode = false;
+    isReviewMode = false;
+    document.getElementById('editor-review-bar').classList.add('hidden');
+    document.getElementById('editor-page-title').innerText = "Toets Editor";
+    document.getElementById('editor-page-sub').innerText = "Maak of bewerk vragen en instellingen";
+    
+    editQuizData = { 
+      meta: { id: null, naam: "", norm: 70, manName: "", manEmail: "", desc: "", regio: "", klantnaam: "", stuurManagerMail: true, toonAntwoorden: true, videoUrl: "", videoDuur: 0, rowIndex: null }, 
+      vragen: [] 
+    }; 
+    ensureDropdownData(function() { 
+      renderEditor(); 
+      show('editor'); 
+      ld(false); 
+    });
+  }
+  
+  function startNieuweAanvraag(event) {
+      var btn = event ? event.currentTarget : null;
+      var orgHtml = "";
+      if (btn) {
+          orgHtml = btn.innerHTML;
+          btn.innerHTML = '<span class="material-icons animate-spin mr-2">autorenew</span> Editor Laden...';
+          btn.disabled = true;
+      }
+
+      isAanvragerMode = true;
+      isReviewMode = false;
+      editQuizData = { 
+        meta: { id: null, naam: "", norm: 70, manName: "", manEmail: userEmail, desc: "", regio: "", klantnaam: "", stuurManagerMail: true, toonAntwoorden: true, videoUrl: "", videoDuur: 0, rowIndex: null }, 
+        vragen: [] 
+      }; 
+      document.getElementById('editor-page-title').innerText = "Nieuwe Toets Ontwerpen";
+      document.getElementById('editor-page-sub').innerText = "Stel je vragen in en dien ter goedkeuring in";
+      document.getElementById('editor-review-bar').classList.add('hidden');
+      document.getElementById('aanvrager-success-msg').classList.add('hidden');
+      document.getElementById('concepten-lijst').classList.add('hidden');
+      
+      ensureDropdownData(function() { 
+        renderEditor(); 
+        show('editor'); 
+        if (btn) {
+            btn.innerHTML = orgHtml;
+            btn.disabled = false;
+        }
+      });
+  }
+
+  function loadConceptenLijst() {
+      var container = document.getElementById('concepten-lijst-container');
+      if (!container) return;
+      container.innerHTML = '<div class="text-sm text-slate-500 italic flex items-center"><span class="material-icons animate-spin mr-2 text-[18px]">autorenew</span> Concepten zoeken...</div>';
+      
+      google.script.run
+        .withSuccessHandler(function(concepten) {
+            if (!concepten || concepten.length === 0) {
+                container.innerHTML = '<div class="text-sm text-slate-500 italic">Je hebt nog geen opgeslagen concepten.</div>';
+                return;
+            }
+            var html = '<ul class="space-y-2">';
+            concepten.forEach(function(c) {
+                html += `
+                <li class="bg-white border border-slate-200 p-3 rounded shadow-sm flex justify-between items-center hover:bg-slate-50 transition-colors">
+                    <div>
+                        <div class="font-bold text-slate-700 text-sm">${c.naam}</div>
+                        <div class="text-xs text-slate-400">Opgeslagen: ${c.datum}</div>
+                    </div>
+                    <button onclick="openConceptAanvraag('${c.id}')" class="btn-outline text-xs text-blue-600 border-blue-200 hover:bg-blue-50 px-3 py-1">Verder Werken</button>
+                </li>`;
+            });
+            html += '</ul>';
+            container.innerHTML = html;
+        })
+        .withFailureHandler(function(err) {
+            container.innerHTML = '<div class="text-sm text-red-500">Fout bij laden concepten: ' + err.message + '</div>';
+        })
+        .getConceptAanvragen();
+  }
+
+  function openConceptAanvraag(conceptId) {
+      ld(true);
+      google.script.run
+        .withSuccessHandler(function(data) {
+            isAanvragerMode = true;
+            isReviewMode = false;
+            editQuizData = data;
+            
+            document.getElementById('editor-page-title').innerText = "Concept Bewerken";
+            document.getElementById('editor-page-sub').innerText = "Werk je opgeslagen concept bij";
+            document.getElementById('editor-review-bar').classList.add('hidden');
+            document.getElementById('aanvrager-success-msg').classList.add('hidden');
+            document.getElementById('concepten-lijst').classList.add('hidden');
+            
+            ensureDropdownData(function() { 
+                renderEditor(); 
+                show('editor'); 
+                ld(false);
+            });
+        })
+        .withFailureHandler(function(err) {
+            ld(false);
+            showModal("Fout bij openen concept: " + err.message);
+        })
+        .loadConceptAanvraag(conceptId);
+  }
+  
+  function loadEditor(id) { 
+    ld(true); 
+    isAanvragerMode = false;
+    isReviewMode = false;
+    document.getElementById('editor-review-bar').classList.add('hidden');
+    document.getElementById('editor-page-title').innerText = "Toets Editor";
+    document.getElementById('editor-page-sub').innerText = "Maak of bewerk vragen en instellingen";
+      
+    if (typeof google === 'undefined') { 
+      setTimeout(function() { ld(false); showModal("Preview: Editor geladen."); }, 500); 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(d) { 
+        editQuizData = d; 
+        ensureDropdownData(function() { 
+          renderEditor(); 
+          show('editor'); 
+          ld(false); 
+        }); 
+      })
+      .withFailureHandler(function(err) { 
+        ld(false); 
+        showModal("Fout bij openen van de toets: " + err.message); 
+      })
+      .getQuizForEdit(id); 
+  }
+
+  function ensureDropdownData(callback) {
+    if (DATA_CACHE.dropdowns) { 
+      callback(); 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(data) { 
+        DATA_CACHE.dropdowns = data; 
+        callback(); 
+      })
+      .withFailureHandler(function(err) { 
+        ld(false); 
+        showModal("Fout bij ophalen dropdown data: " + err.message); 
+      })
+      .getEditorDropdownData();
+  }
+
+  function renderEditor() {
+    var con = document.getElementById('editor-container'); 
+    var d = editQuizData;
+    var drop = DATA_CACHE.dropdowns || { regios: [], klanten: [] };
+    
+    var esc = function(str) { 
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;'); 
+    };
+    
+    var regioOpts = ''; 
+    drop.regios.forEach(function(r) { 
+      regioOpts += `<option value="${r}" ${d.meta.regio === r ? 'selected' : ''}>${r}</option>`; 
+    });
+    
+    var klantOpts = `<option value="Intern" ${d.meta.klantnaam === 'Intern' ? 'selected' : ''}>Intern</option>`; 
+    drop.klanten.forEach(function(k) { 
+      klantOpts += `<option value="${k}" ${d.meta.klantnaam === k ? 'selected' : ''}>${k}</option>`; 
+    });
+
+    var manNames = (d.meta.manName || '').split(',').map(function(s) { return s.trim(); });
+    var manEmails = (d.meta.manEmail || '').split(',').map(function(s) { return s.trim(); });
+    var maxMans = Math.max(manNames.length, manEmails.length, 1);
+    
+    var managersHtml = '<div id="ed-managers-container">';
+    for (var m = 0; m < maxMans; m++) {
+      var n = manNames[m] || '';
+      var e = manEmails[m] || '';
+      
+      var delManBtn = '';
+      if (m > 0 && !isReviewMode) {
+        delManBtn = `<button onclick="this.closest('.manager-row').remove()" class="text-slate-400 hover:text-red-600 pb-2" title="Manager verwijderen"><span class="material-icons">delete</span></button>`;
+      } else {
+        delManBtn = `<div style="width: 24px;"></div>`;
+      }
+      
+      managersHtml += `
+        <div class="flex items-end gap-4 mb-2 manager-row">
+          <div class="flex-grow">
+            ${m === 0 ? '<label class="block text-xs font-bold uppercase mb-1">Manager Naam</label>' : ''}
+            <input type="text" class="w-full border p-2 rounded ed-man-naam-input" placeholder="Manager Naam" value="${esc(n)}">
+          </div>
+          <div class="flex-grow">
+            ${m === 0 ? '<label class="block text-xs font-bold uppercase mb-1">Manager Email</label>' : ''}
+            <input type="text" class="w-full border p-2 rounded ed-man-email-input" placeholder="Manager Email" value="${esc(e)}">
+          </div>
+          ${delManBtn}
+        </div>
+      `;
+    }
+    managersHtml += '</div>';
+    
+    var stuurManagerMail = d.meta.stuurManagerMail !== false;
+    
+    var toonAntwoorden = d.meta.toonAntwoorden !== false;
+    
+    var addManagerBtnHtml = '';
+    if (!isReviewMode) {
+      addManagerBtnHtml = `<button onclick="addManagerRowEditor()" class="text-xs font-bold text-[#D32F2F] hover:text-red-800 flex items-center gap-1 self-start"><span class="material-icons text-[16px]">add_circle</span> Extra manager toevoegen</button>`;
+    }
+    
+    managersHtml += `
+      <div class="mb-4 flex flex-col gap-3">
+        ${addManagerBtnHtml}
+        <label class="inline-flex items-center cursor-pointer select-none self-start bg-white p-2 border rounded border-slate-200">
+          <input type="checkbox" id="ed-stuur-manager-mail" class="w-4 h-4 text-[#D32F2F] accent-[#D32F2F]" ${stuurManagerMail ? 'checked' : ''} ${isReviewMode ? 'disabled' : ''}>
+          <span class="ml-2 text-xs font-bold text-slate-700 uppercase">Stuur e-mail notificatie & PDF naar manager(s) bij afronding</span>
+        </label>
+        <label class="inline-flex items-center cursor-pointer select-none self-start bg-white p-2 border rounded border-slate-200">
+          <input type="checkbox" id="ed-toon-antwoorden" class="w-4 h-4 text-[#D32F2F] accent-[#D32F2F]" ${toonAntwoorden ? 'checked' : ''} ${isReviewMode ? 'disabled' : ''}>
+          <span class="ml-2 text-xs font-bold text-slate-700 uppercase">Toon juiste antwoorden aan kandidaat na afronding</span>
+        </label>
+      </div>
+    `;
+
+    var html = `
+      <div class="card p-6 bg-slate-50 border border-slate-200 mb-6">
+        <div class="flex flex-col md:flex-row gap-4 mb-4">
+          <div class="flex-1">
+            <label class="block text-xs font-bold uppercase mb-1">Naam Toets *</label>
+            <input type="text" id="ed-naam" value="${d.meta.naam}" class="w-full border p-2 rounded">
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-bold uppercase mb-1">Omschrijving (Intern)</label>
+            <input type="text" id="ed-desc" value="${d.meta.desc||''}" class="w-full border p-2 rounded">
+          </div>
+        </div>
+        <div class="flex flex-col md:flex-row gap-4 mb-4">
+          <div class="flex-1">
+            <label class="block text-xs font-bold uppercase mb-1 text-[#D32F2F]">Regio *</label>
+            <select id="ed-regio" class="w-full border p-2 rounded bg-white">
+              <option value="">-- Selecteer Regio --</option>
+              ${regioOpts}
+            </select>
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-bold uppercase mb-1 text-[#D32F2F]">Klantnaam *</label>
+            <select id="ed-klant" class="w-full border p-2 rounded bg-white">
+              <option value="">-- Selecteer Klant --</option>
+              ${klantOpts}
+            </select>
+          </div>
+        </div>
+        ${managersHtml}
+        <div class="flex flex-col md:flex-row gap-4 mb-4">
+          <div class="flex-1">
+            <label class="block text-xs font-bold uppercase mb-1">Norm (%)</label>
+            <input type="number" id="ed-norm" value="${d.meta.norm}" class="w-full border p-2 rounded">
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-bold uppercase mb-1">Totaal Vragen</label>
+            <div class="p-2 font-bold text-slate-800 text-lg">${d.vragen.length}</div>
+          </div>
+        </div>
+        <div class="border-t border-slate-200 pt-4 mt-2">
+          <label class="block text-xs font-bold uppercase mb-1 text-slate-700 flex items-center gap-1">
+            <span class="material-icons text-[16px] text-[#D32F2F]">smart_display</span> Instructievideo (YouTube of Google Drive - Optioneel)
+          </label>
+          <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-grow">
+              <input type="text" id="ed-video-url" value="${esc(d.meta.videoUrl||'')}" placeholder="Plak hier de YouTube link of Google Drive link van de video..." class="w-full border p-2 rounded text-sm bg-white" ${isReviewMode ? 'disabled' : ''}>
+              <p class="text-[11px] text-slate-400 mt-1">Ondersteunt YouTube (openbaar of verborgen/unlisted) én Google Drive MP4 links.</p>
+            </div>
+            <div class="w-full md:w-56">
+              <input type="number" id="ed-video-duur" value="${d.meta.videoDuur || ''}" placeholder="Duur (seconden)" min="0" class="w-full border p-2 rounded text-sm bg-white" ${isReviewMode ? 'disabled' : ''}>
+              <p class="text-[11px] text-slate-400 mt-1">Wachttijd in sec. (bijv. 120 = 2 min).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="ed-questions">
+    `;
+      
+    d.vragen.forEach(function(q, i) { 
+      var thumbUrl = getDriveThumbUrl(q.img);
+      var imgPreviewHtml = q.img ? `
+        <div class="img-hover-wrap flex items-center justify-center w-full h-full cursor-help relative" onmouseenter="this.querySelector('.hover-preview').style.display='block'" onmouseleave="this.querySelector('.hover-preview').style.display='none'">
+          <span class="material-icons text-[#2E7D32]">image</span>
+          <div class="hover-preview absolute bottom-full mb-2 right-0 z-[100] bg-white border border-slate-200 shadow-2xl p-2 rounded" style="display:none; width:max-content;">
+            <img src="${thumbUrl}" style="max-width:300px; max-height:300px; object-fit:contain; display:block;">
+            </div>
+        </div>` : '<span class="material-icons text-slate-300 text-sm">image</span>';
+
+      var deleteQuestionBtnHtml = '';
+      if (!isReviewMode) {
+         deleteQuestionBtnHtml = `<button onclick="askRemoveQ(${i})" class="absolute top-2 right-2 text-red-300 hover:text-red-600"><span class="material-icons">delete</span></button>`;
+      }
+      
+      var deleteImgBtnHtml = '';
+      if (!isReviewMode) {
+         deleteImgBtnHtml = `<button onclick="askRemoveAfbeelding(${i})" class="text-slate-400 hover:text-[#D32F2F] p-1" title="Verwijder Afbeelding"><span class="material-icons">delete_outline</span></button>`;
+      }
+      
+      var uploadInputDisabled = isReviewMode ? 'disabled' : '';
+
+      html += `
+      <div class="card p-6 mb-4 relative group" id="q-row-${i}" style="overflow: visible;">
+        ${deleteQuestionBtnHtml}
+        <div class="mb-3">
+          <label class="text-xs font-bold text-[#D32F2F] uppercase">Vraag ${i+1}</label>
+          <textarea class="w-full border p-2 rounded font-medium q-input-text resize-none overflow-hidden" rows="2" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'" title="${esc(q.vraag)}">${esc(q.vraag)}</textarea>
+        </div>
+        <div class="flex flex-col md:flex-row gap-3 mb-3">
+          <div class="flex-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">Optie 1</label>
+            <textarea class="w-full border p-2 rounded text-sm q-opt-1 resize-none overflow-hidden" placeholder="Antwoord 1" rows="2" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'" title="${esc(q.o1)}">${esc(q.o1)}</textarea>
+          </div>
+          <div class="flex-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">Optie 2</label>
+            <textarea class="w-full border p-2 rounded text-sm q-opt-2 resize-none overflow-hidden" placeholder="Antwoord 2" rows="2" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'" title="${esc(q.o2)}">${esc(q.o2)}</textarea>
+          </div>
+          <div class="flex-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">Optie 3</label>
+            <textarea class="w-full border p-2 rounded text-sm q-opt-3 resize-none overflow-hidden" placeholder="Antwoord 3" rows="2" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'" title="${esc(q.o3)}">${esc(q.o3)}</textarea>
+          </div>
+          <div class="flex-1">
+            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">Optie 4</label>
+            <textarea class="w-full border p-2 rounded text-sm q-opt-4 resize-none overflow-hidden" placeholder="Antwoord 4" rows="2" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'" title="${esc(q.o4)}">${esc(q.o4)}</textarea>
+          </div>
+        </div>
+        <div class="flex flex-col md:flex-row gap-3 mb-3 items-end">
+          <div class="w-full md:w-1/3">
+            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">Correct (1,2..)</label>
+            <input type="text" class="w-full border p-2 rounded q-corr" value="${esc(q.correct)}">
+          </div>
+          <div class="w-full md:w-2/3">
+            <label class="text-[10px] uppercase font-bold text-slate-500 block mb-1">Afbeelding</label>
+            <div class="flex items-center gap-2">
+              <input type="file" id="file-upload-${i}" accept="image/*" class="border p-1 rounded text-sm flex-grow bg-white" onchange="uploadFile(this, ${i})" ${uploadInputDisabled}>
+              <input type="hidden" class="q-img" id="q-img-${i}" value="${q.img||''}">
+              <div id="img-preview-${i}" class="w-10 h-10 border rounded flex items-center justify-center bg-white shrink-0 relative" style="overflow:visible;">
+                ${imgPreviewHtml}
+              </div>
+              ${deleteImgBtnHtml}
+            </div>
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="text-[10px] uppercase font-bold text-slate-500">Uitleg</label>
+          <textarea class="w-full border p-2 rounded text-sm q-uitleg resize-none overflow-hidden" rows="2" oninput="this.style.height='';this.style.height=this.scrollHeight+'px'" title="${esc(q.uitleg)}">${esc(q.uitleg)}</textarea>
+        </div>
+        <div class="mt-2">
+          <label class="inline-flex items-center">
+            <input type="checkbox" class="q-verplicht text-[#D32F2F] w-4 h-4 mr-2" ${q.verplicht?'checked':''}> 
+            <span class="text-sm text-slate-600">Verplichte vraag</span>
+          </label>
+        </div>
+      </div>`; 
+    });
+    
+    var saveBtnHtml = '';
+    if (isReviewMode) {
+       saveBtnHtml = '';
+    } else if (isAanvragerMode) {
+       saveBtnHtml = `
+       <div class="flex flex-col gap-3">
+           <button id="btn-submit-aanvraag" onclick="submitAanvraag()" class="btn-primary w-full py-4 text-lg font-bold shadow-lg uppercase tracking-wider transition-colors" style="background-color: #2E7D32;"><span class="material-icons mr-2">send</span> INDIENEN TER GOEDKEURING</button>
+           <button id="btn-save-concept" onclick="saveConcept()" class="btn-outline w-full py-3 text-sm font-bold shadow-sm uppercase tracking-wider text-slate-600 hover:bg-slate-100"><span class="material-icons mr-2 text-[18px]">save</span> TUSSENTIJDS OPSLAAN ALS CONCEPT</button>
+       </div>`;
+    } else {
+       saveBtnHtml = '<button onclick="saveQuiz()" class="btn-primary w-full py-4 text-lg font-bold shadow-lg uppercase tracking-wider" style="background-color: #003366;">WIJZIGINGEN OPSLAAN</button>';
+    }
+
+    var addQuestionBtnHtml = '';
+    if (!isReviewMode) {
+      addQuestionBtnHtml = '<button onclick="addQuestionItem()" class="btn-outline w-full justify-center mb-6 py-3 border-dashed border-2 border-slate-300"><span class="material-icons mr-2">add_circle</span> Vraag Toevoegen</button>';
+    }
+
+    html += `
+      </div>
+      ${addQuestionBtnHtml}
+      ${saveBtnHtml}`;
+    
+    con.innerHTML = html;
+    
+    setTimeout(function() {
+      var tx = con.querySelectorAll("textarea");
+      for (var i = 0; i < tx.length; i++) {
+        if (tx[i].value.trim() !== '') {
+          tx[i].style.height = '';
+          tx[i].style.height = tx[i].scrollHeight + 'px';
+        }
+      }
+    }, 50);
+    
+    if (isReviewMode) {
+       setTimeout(function() {
+          var inputs = document.getElementById('view-editor').querySelectorAll('input, select, textarea');
+          inputs.forEach(function(el) { el.disabled = true; });
+       }, 50);
+    }
+  }
+
+  function addManagerRowEditor() {
+    var con = document.getElementById('ed-managers-container');
+    var div = document.createElement('div');
+    div.className = "flex items-end gap-4 mb-2 manager-row";
+    div.innerHTML = `
+      <div class="flex-grow">
+        <input type="text" class="w-full border p-2 rounded ed-man-naam-input" placeholder="Extra Manager Naam">
+      </div>
+      <div class="flex-grow">
+        <input type="text" class="w-full border p-2 rounded ed-man-email-input" placeholder="Extra Manager Email">
+      </div>
+      <button onclick="this.closest('.manager-row').remove()" class="text-slate-400 hover:text-red-600 pb-2" title="Manager verwijderen">
+        <span class="material-icons">delete</span>
+      </button>
+    `;
+    con.appendChild(div);
+  }
+
+  function addQuestionItem() { 
+    editQuizData = collectQuizDataFromForm();
+    editQuizData.vragen.push({ vraag: "", o1: "", o2: "", o3: "", o4: "", correct: "", verplicht: false, img: "", uitleg: "" }); 
+    renderEditor(); 
+  }
+  
+  function askRemoveQ(i) { 
+    showModal("Weet je zeker dat je deze vraag definitief wilt verwijderen?", true, function() { closeModal(); removeQ(i); }); 
+  }
+  
+  function removeQ(i) { 
+    editQuizData = collectQuizDataFromForm();
+    var urlInput = document.getElementById(`q-img-${i}`); 
+    if (urlInput && urlInput.value) { 
+      if (typeof google !== 'undefined') {
+      google.script.run
+        .withFailureHandler(function(err) { showModal("Afbeelding verwijderen mislukt: " + err.message); })
+        .deleteImageFromDrive(urlInput.value, editQuizData && editQuizData.meta ? editQuizData.meta.id : "");
+      }
+    } 
+    editQuizData.vragen.splice(i, 1); 
+    renderEditor(); 
+  }
+  
+  function askRemoveAfbeelding(index) { 
+    showModal("Weet je zeker dat je deze afbeelding wilt verwijderen?", true, function() { closeModal(); removeAfbeelding(index); }); 
+  }
+  
+  function removeAfbeelding(index) { 
+    var urlInput = document.getElementById(`q-img-${index}`); 
+    if (urlInput && urlInput.value) { 
+      if (typeof google !== 'undefined') {
+      google.script.run
+        .withFailureHandler(function(err) { showModal("Afbeelding verwijderen mislukt: " + err.message); })
+        .deleteImageFromDrive(urlInput.value, editQuizData && editQuizData.meta ? editQuizData.meta.id : "");
+      }
+    } 
+    document.getElementById(`q-img-${index}`).value = ""; 
+    document.getElementById(`file-upload-${index}`).value = ""; 
+    document.getElementById(`img-preview-${index}`).innerHTML = '<span class="material-icons text-slate-300 text-sm">image</span>'; 
+  }
+
+  function uploadFile(input, index) {
+    if (!input.files || input.files.length === 0) return;
+    
+    var file = input.files[0];
+    var toetsNaam = document.getElementById('ed-naam').value;
+    
+    if (!toetsNaam || toetsNaam.trim() === "") { 
+        if (!isAanvragerMode) {
+            showModal("Vul eerst een 'Naam Toets' in bovenaan de editor, zodat de foto in de juiste map komt."); 
+            input.value = ""; 
+            return; 
+        } else {
+            toetsNaam = "Concept_Aanvraag"; 
+        }
+    }
+    
+    var reader = new FileReader(); 
+    var previewDiv = document.getElementById(`img-preview-${index}`);
+    
+    previewDiv.innerHTML = '<span class="material-icons animate-spin text-[#D32F2F] text-[20px]" style="animation: spin 1s linear infinite;">autorenew</span>';
+    
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      
+      google.script.run
+        .withSuccessHandler(function(url) { 
+          document.getElementById(`q-img-${index}`).value = url; 
+          var thumbUrl = getDriveThumbUrl(url); 
+          previewDiv.innerHTML = `
+            <div class="img-hover-wrap flex items-center justify-center w-full h-full cursor-help relative" onmouseenter="this.querySelector('.hover-preview').style.display='block'" onmouseleave="this.querySelector('.hover-preview').style.display='none'">
+              <span class="material-icons text-[#2E7D32]">image</span>
+              <div class="hover-preview absolute bottom-full mb-2 right-0 z-[100] bg-white border border-slate-200 shadow-2xl p-2 rounded" style="display:none; width:max-content;">
+                <img src="${thumbUrl}" style="max-width:300px; max-height:300px; object-fit:contain; display:block;">
+              </div>
+            </div>`; 
+        })
+        .withFailureHandler(function(err) { 
+          previewDiv.innerHTML = '<span class="material-icons text-red-500 text-sm">error</span>'; 
+          showModal("Fout bij uploaden van de afbeelding: " + err.message); 
+        })
+        .uploadImageToDrive(base64, file.name, file.type, toetsNaam, isAanvragerMode);
+    };
+    
+    reader.readAsDataURL(file);
+  }
+
+  function collectQuizDataFromForm() {
+    var manNamesArr = [];
+    var manEmailsArr = [];
+    var manRows = document.querySelectorAll('.manager-row');
+    for (var m = 0; m < manRows.length; m++) {
+      var n = manRows[m].querySelector('.ed-man-naam-input').value.trim();
+      var e = manRows[m].querySelector('.ed-man-email-input').value.trim();
+      if (n || e) {
+        manNamesArr.push(n);
+        manEmailsArr.push(e);
+      }
+    }
+
+    var meta = {
+      id: editQuizData.meta.id, 
+      rowIndex: editQuizData.meta.rowIndex,
+      naam: document.getElementById('ed-naam').value,
+      desc: document.getElementById('ed-desc').value,
+      regio: document.getElementById('ed-regio').value,
+      klantnaam: document.getElementById('ed-klant').value,
+      manName: manNamesArr.join(', '),
+      manEmail: manEmailsArr.join(', '),
+      norm: document.getElementById('ed-norm').value,
+      stuurManagerMail: document.getElementById('ed-stuur-manager-mail').checked,
+      toonAntwoorden: document.getElementById('ed-toon-antwoorden') ? document.getElementById('ed-toon-antwoorden').checked : true,
+      videoUrl: document.getElementById('ed-video-url') ? document.getElementById('ed-video-url').value.trim() : (editQuizData.meta.videoUrl || ""),
+      videoDuur: document.getElementById('ed-video-duur') ? (parseInt(document.getElementById('ed-video-duur').value, 10) || 0) : (editQuizData.meta.videoDuur || 0)
+    };
+
+    var qRows = document.getElementById('ed-questions').children;
+    var nV = [];
+
+    for(var i=0; i<qRows.length; i++) {
+      nV.push({
+        vraag: qRows[i].querySelector('.q-input-text').value,
+        o1: qRows[i].querySelector('.q-opt-1').value,
+        o2: qRows[i].querySelector('.q-opt-2').value,
+        o3: qRows[i].querySelector('.q-opt-3').value,
+        o4: qRows[i].querySelector('.q-opt-4').value,
+        correct: qRows[i].querySelector('.q-corr').value,
+        img: qRows[i].querySelector('.q-img').value,
+        uitleg: qRows[i].querySelector('.q-uitleg').value,
+        verplicht: qRows[i].querySelector('.q-verplicht').checked
+      });
+    }
+    return { meta: meta, vragen: nV };
+  }
+  
+  function saveQuiz() {
+    var data = collectQuizDataFromForm();
+    
+    if (!data.meta.naam || !data.meta.regio || !data.meta.klantnaam) {
+      return showModal("Naam, Regio en Klantnaam zijn verplicht.");
+    }
+    
+    showModal("Toets wordt razendsnel op de achtergrond opgeslagen!", false, null, true);
+    show('index', document.getElementById('link-index')); 
+    
+    if (typeof google !== 'undefined') {
+      google.script.run
+        .withSuccessHandler(function() {
+          DATA_CACHE.index = null; 
+          lTests(true); 
+        })
+        .saveQuizChanges(data);
+    }
+  }
+  
+  function submitAanvraag() {
+    var data = collectQuizDataFromForm();
+
+    if (!data.meta.naam || !data.meta.regio || !data.meta.klantnaam) {
+      return showModal("Naam Toets, Regio en Klantnaam zijn verplicht voor het indienen.");
+    }
+
+    if (data.vragen.length === 0) {
+        return showModal("Voeg minimaal één vraag toe voordat je indient.");
+    }
+
+    var btn = document.getElementById('btn-submit-aanvraag');
+    var orgHtml = "";
+    if (btn) {
+        orgHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="material-icons animate-spin mr-2">autorenew</span> Aanvraag Indienen...';
+        btn.disabled = true;
+        btn.classList.replace('bg-[#2E7D32]', 'bg-slate-400');
+    }
+
+    if (typeof google !== 'undefined') {
+      google.script.run
+        .withSuccessHandler(function() {
+          show('aanvrager-dash');
+          document.getElementById('aanvrager-success-msg').classList.remove('hidden');
+          var cLijst = document.getElementById('concepten-lijst');
+          if (cLijst) cLijst.classList.remove('hidden');
+          loadConceptenLijst(); 
+          window.scrollTo(0,0);
+        })
+        .withFailureHandler(function(err) {
+          if (btn) {
+              btn.innerHTML = orgHtml;
+              btn.disabled = false;
+              btn.classList.replace('bg-slate-400', 'bg-[#2E7D32]');
+          }
+          showModal("Fout bij indienen: " + err.message);
+        })
+        .submitNieuweAanvraag(data);
+    }
+  }
+
+  function saveConcept() {
+      var data = collectQuizDataFromForm();
+      editQuizData = data; 
+      
+      var btn = document.getElementById('btn-save-concept');
+      var orgText = "";
+      if (btn) {
+          orgText = btn.innerHTML;
+          btn.innerHTML = '<span class="material-icons animate-spin mr-2 text-[18px]">autorenew</span> Opslaan...';
+          btn.disabled = true;
+      }
+
+      if (typeof google !== 'undefined') {
+          google.script.run
+            .withSuccessHandler(function(res) {
+                editQuizData.meta.id = res.conceptId; 
+                if (btn) {
+                    btn.innerHTML = '<span class="material-icons mr-2 text-[18px] text-green-600">check</span> Opgeslagen';
+                    setTimeout(function(){
+                        btn.innerHTML = orgText;
+                        btn.disabled = false;
+                    }, 2000);
+                }
+            })
+            .withFailureHandler(function(err) {
+                if (btn) {
+                    btn.innerHTML = orgText;
+                    btn.disabled = false;
+                }
+                showModal("Fout bij opslaan concept: " + err.message);
+            })
+            .saveConceptAanvraag(data);
+      }
+  }
+  
+  function loadAanvragenWachtrij(silent) {
+    if (!silent) ld(true);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        var tb = document.getElementById('table-aanvragen-wachtrij');
+        if (tb) {
+            tb.innerHTML = '';
+            if (res.length === 0) {
+                tb.innerHTML = '<tr><td colspan="5" class="text-center text-slate-500 italic py-4">Geen openstaande aanvragen</td></tr>';
+            } else {
+                res.forEach(function(r) {
+                    tb.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td data-label="AANGEVRAAGD OP" class="text-xs">${r.datum}</td>
+                        <td data-label="AANVRAGER" class="text-sm font-bold text-slate-700">${r.aanvrager}</td>
+                        <td data-label="TOETS NAAM" class="text-sm">${r.naam}</td>
+                        <td data-label="VRAGEN">${r.vragen}</td>
+                        <td data-label="ACTIES" style="text-align:right;">
+                          <button onclick="openAanvraagBeoordeling('${r.id}')" class="btn-primary text-xs px-3 py-1 bg-orange-500 hover:bg-orange-600 inline-flex">Beoordelen</button>
+                        </td>
+                    </tr>`;
+                });
+            }
+        }
+        if (!silent) ld(false);
+      })
+      .withFailureHandler(function(err) {
+        if (!silent) {
+            ld(false);
+            showModal("Fout bij ophalen wachtrij: " + err.message);
+        }
+      })
+      .getAanvragenWachtrij();
+  }
+
+  function openAanvraagBeoordeling(id) {
+    ld(true);
+    google.script.run
+      .withSuccessHandler(function(d) {
+        editQuizData = d;
+        isReviewMode = true;
+        isAanvragerMode = false;
+        activeAanvraagId = id;
+
+        document.getElementById('editor-page-title').innerText = "Beoordeel Aanvraag";
+        document.getElementById('editor-page-sub').innerText = "Controleer of de toets voldoet en keur deze goed of af";
+        document.getElementById('editor-review-bar').classList.remove('hidden');
+
+        ensureDropdownData(function() {
+          renderEditor();
+          show('editor');
+          ld(false);
+        });
+      })
+      .withFailureHandler(function(err) {
+        ld(false);
+        showModal("Fout bij openen aanvraag: " + err.message);
+      })
+      .getAanvraagDetails(id);
+  }
+
+  function afkeurenAanvraag() {
+      showModal("Weet je zeker dat je deze aanvraag wilt afkeuren en permanent wilt verwijderen?", true, function() {
+          closeModal();
+          ld(true);
+          google.script.run
+            .withSuccessHandler(function(r) {
+                showModal(r.message, false, null, true);
+                
+                var badge = document.getElementById('badge-aanvragen');
+                if (badge && !badge.classList.contains('hidden')) {
+                    var curr = parseInt(badge.innerText) || 0;
+                    if (curr > 1) { badge.innerText = curr - 1; } else { badge.classList.add('hidden'); }
+                }
+                
+                cancelEditor();
+            })
+            .withFailureHandler(function(err) {
+                ld(false);
+                showModal("Fout: " + err.message);
+            })
+            .verwerkAanvraag(activeAanvraagId, 'AFKEUREN');
+      });
+  }
+
+  function goedkeurenAanvraag() {
+      showModal("Weet je zeker dat je deze toets wilt goedkeuren? Hij wordt direct in de live database geplaatst.", true, function() {
+          closeModal();
+          ld(true);
+          google.script.run
+            .withSuccessHandler(function(r) {
+                showModal(r.message, false, null, true);
+                DATA_CACHE.index = null; 
+                
+                var badge = document.getElementById('badge-aanvragen');
+                if (badge && !badge.classList.contains('hidden')) {
+                    var curr = parseInt(badge.innerText) || 0;
+                    if (curr > 1) { badge.innerText = curr - 1; } else { badge.classList.add('hidden'); }
+                }
+                
+                cancelEditor();
+            })
+            .withFailureHandler(function(err) {
+                ld(false);
+                showModal("Fout: " + err.message);
+            })
+            .verwerkAanvraag(activeAanvraagId, 'GOEDKEUREN');
+      });
+  }
+
+  function doImport() { 
+    var u = document.getElementById('inp-url').value; 
+    if (!u) return; 
+    
+    document.getElementById('inp-url').value = ""; 
+    document.getElementById('i-msg').innerHTML = "<div class='card p-4 status-open' style='color:black'>Inlezen...</div>";
+    
+    if (typeof google === 'undefined') { 
+      setTimeout(function() { document.getElementById('i-msg').innerHTML = "<div class='card p-4 status-done' style='color:black'>Preview: Import gelukt.</div>"; }, 1000); 
+      return; 
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(r) { 
+        document.getElementById('i-msg').innerHTML = "<div class='card p-4 status-done' style='color:black'>" + r.message + "</div>"; 
+        if (r.success) { 
+          DATA_CACHE.index = null; 
+          lTests(true); 
+          showModal("Toets succesvol geïmporteerd!");
+          setTimeout(function() {
+            closeModal();
+            show('index', document.getElementById('link-index'));
+          }, 2000);
+        } 
+        setTimeout(function() { document.getElementById('i-msg').innerHTML = ""; }, 5000); 
+      })
+      .withFailureHandler(function(err) { 
+        document.getElementById('i-msg').innerHTML = "<div class='card p-4 status-error' style='color:black'>Fout: " + err.message + "</div>"; 
+      })
+      .importeerToetsInDatabase(u); 
+  }
+
+  function openAanvragerImportModal() {
+      document.getElementById('inp-aanvrager-url').value = '';
+      document.getElementById('modal-aanvrager-import').classList.remove('hidden');
+      document.getElementById('modal-aanvrager-import').style.display = 'flex';
+  }
+
+  function closeAanvragerImportModal() {
+      document.getElementById('modal-aanvrager-import').classList.add('hidden');
+      document.getElementById('modal-aanvrager-import').style.display = 'none';
+  }
+
+  function doAanvragerImport() {
+      var u = document.getElementById('inp-aanvrager-url').value;
+      if (!u) return showModal("Plak eerst een geldige Google Sheets link in het invoerveld.");
+
+      var btn = document.getElementById('btn-aanvrager-import');
+      var orgHtml = btn.innerHTML;
+      btn.innerHTML = '<span class="material-icons animate-spin mr-2">autorenew</span> Verwerken...';
+      btn.disabled = true;
+
+      if (typeof google !== 'undefined') {
+          google.script.run
+              .withSuccessHandler(function(r) {
+                  btn.innerHTML = orgHtml;
+                  btn.disabled = false;
+                  closeAanvragerImportModal();
+                  
+                  if (r.success) {
+                      document.getElementById('aanvrager-success-msg').classList.remove('hidden');
+                      document.getElementById('aanvrager-success-text').innerHTML = `
+                          <h3 class="font-bold text-lg">Template succesvol ingediend!</h3>
+                          <p class="text-sm">We hebben de data uitgelezen. Het beheerteam heeft jouw toets ontvangen en zal deze beoordelen.</p>
+                      `;
+                      window.scrollTo(0,0);
+                  } else {
+                      showModal(r.message);
+                  }
+              })
+              .withFailureHandler(function(err) {
+                  btn.innerHTML = orgHtml;
+                  btn.disabled = false;
+                  showModal("Fout bij importeren: " + err.message);
+              })
+              .importeerAanvraagVanuitTemplate(u);
+      }
+  }
+
+  function toggleAccountType() {
+    var accType = document.getElementById('s-acctype').value;
+    var repInput = document.getElementById('s-rep');
+    var repLabel = document.getElementById('lbl-s-rep');
+    
+    if (accType === 'Gedeeld') {
+      repInput.value = "";
+      repInput.disabled = true;
+      repInput.classList.add('bg-slate-200', 'cursor-not-allowed', 'text-slate-400');
+      repLabel.classList.add('text-slate-400');
+      repLabel.innerText = "Herhaling (Niet mogelijk)";
+    } else {
+      repInput.disabled = false;
+      repInput.classList.remove('bg-slate-200', 'cursor-not-allowed', 'text-slate-400');
+      repLabel.classList.remove('text-slate-400');
+      repLabel.innerText = "Herhaling (Dagen)";
+      if(repInput.value === "") repInput.value = "0";
+    }
+  }
+
+  function syncTime() {
+    var numInp = document.getElementById('s-num');
+    var timeInp = document.getElementById('s-time');
+    if (numInp && timeInp) {
+      timeInp.value = numInp.value;
+    }
+  }
+
+  function updS() {
+    var t = null;
+    var sVal = document.getElementById('send-toets').value;
+    for(var i=0; i<tests.length; i++) {
+      if (tests[i].id == sVal) { t = tests[i]; break; }
+    }
+    
+    if (t) {
+      document.getElementById('inf-man').innerText = t.managerName || "-"; 
+      document.getElementById('s-sc').value = t.norm;
+      
+      var numInp = document.getElementById('s-num'); 
+      numInp.min = t.vragen_verplicht || 1; 
+      numInp.max = t.vragen_totaal; 
+      numInp.value = t.vragen_totaal;
+      
+      document.getElementById('inf-tot').innerText = t.vragen_totaal; 
+      
+      var timeInp = document.getElementById('s-time'); 
+      if (timeInp) {
+        timeInp.value = t.vragen_totaal;
+      }
+
+      document.getElementById('s-acctype').value = "Persoonlijk";
+      toggleAccountType();
+    }
+  }
+
+  function doSend() { 
+    var isGedeeld = document.getElementById('s-acctype').value === 'Gedeeld';
+    
+    var rawEmails = document.getElementById('send-emails').value.split(/[\n,;]+/);
+    var validCount = 0;
+    for (var e = 0; e < rawEmails.length; e++) {
+      if (rawEmails[e].trim() !== "") validCount++;
+    }
+    
+    if (validCount > 100) {
+      return showModal("Let op: Je probeert " + validCount + " e-mails in één keer te versturen. Het maximum is 100 per keer om te voorkomen dat de server overbelast raakt. Splits de lijst a.u.b. op in kleinere delen.");
+    }
+
+    var c = { 
+      toetsId: document.getElementById('send-toets').value, 
+      emails: document.getElementById('send-emails').value, 
+      aantalVragen: parseInt(document.getElementById('s-num').value) || 0, 
+      minScore: parseInt(document.getElementById('s-sc').value), 
+      maxTijd: parseFloat(document.getElementById('s-time').value) || 0, 
+      herhaling: isGedeeld ? "" : document.getElementById('s-rep').value, 
+      ccEmails: document.getElementById('s-cc').value,
+      accType: document.getElementById('s-acctype').value 
+    };
+    
+    if (!c.toetsId || !c.emails) {
+      return showModal("Vul toets en e-mails in.");
+    }
+    
+    showModal("De uitnodigingen worden razendsnel op de achtergrond verwerkt!", false, null, true);
+    
+    document.getElementById('send-toets').value = ""; 
+    document.getElementById('send-emails').value = ""; 
+    document.getElementById('s-cc').value = "";
+    document.getElementById('s-res').innerHTML = "<div class='card p-4 status-open' style='color:black'>Uitnodigingen worden verwerkt...</div>";
+    
+    if (typeof google !== 'undefined') {
+      google.script.run
+        .withSuccessHandler(function(r) { 
+          if (r.success) {
+            var html = "<div class='card p-4 status-done' style='color:black'><b>" + r.message + "</b></div>";
+            if (r.isValidationError) {
+              html += "<div class='card p-4 status-error mt-4' style='color:black'><b class='text-[#D32F2F]'>Let op! Deels overgeslagen:</b><br>De volgende e-mailadressen komen niet voor in de database (of missen @nl.g4s.com) en zijn niet verstuurd:<ul class='list-disc list-inside mt-2 text-sm text-red-800 font-medium'>";
+              r.invalidEmails.forEach(function(em) { html += "<li>" + em + "</li>"; });
+              html += "</ul></div>";
+            }
+            document.getElementById('s-res').innerHTML = html;
+          } else if (r.isValidationError) {
+            var errHtml = "<div class='card p-4 status-error' style='color:black'><b class='text-[#D32F2F]'>Let op! Ongeautoriseerde accounts:</b><br>Geen enkele uitnodiging verstuurd. De volgende e-mailadressen komen niet voor in de database:<ul class='list-disc list-inside mt-2 text-sm text-red-800 font-medium'>";
+            r.invalidEmails.forEach(function(em) { errHtml += "<li>" + em + "</li>"; });
+            errHtml += "</ul></div>";
+            document.getElementById('s-res').innerHTML = errHtml;
+          } else {
+            document.getElementById('s-res').innerHTML = "<div class='card p-4 status-error' style='color:black'>Fout: " + r.message + "</div>";
+          }
+        })
+        .withFailureHandler(function(err) { 
+          document.getElementById('s-res').innerHTML = "<div class='card p-4 status-error' style='color:black'>Fout op achtergrond: " + err.message + "</div>"; 
+        })
+        .genereerEnVerstuur(c); 
+    }
+  }
+
+  function toggleTimer() {
+    quizTimerHidden = !quizTimerHidden;
+    var txt = document.getElementById('quiz-timer-text');
+    var icon = document.getElementById('quiz-timer-icon');
+    if (quizTimerHidden) {
+        txt.style.display = 'none';
+        icon.innerText = 'visibility';
+    } else {
+        txt.style.display = 'inline';
+        icon.innerText = 'visibility_off';
+    }
+  }
+
+  function startTimerDisplay() {
+    var maxMins = parseFloat(quiz.meta.maxTijd) || 0;
+    if (maxMins <= 0) return;
+
+    var endTime = startTime.getTime() + (maxMins * 60000);
+
+    function update() {
+        var now = new Date().getTime();
+        var diff = endTime - now;
+        var txt = document.getElementById('quiz-timer-text');
+        if (!txt) return;
+
+        if (diff <= 0) {
+            txt.innerText = "Tijd is verstreken!";
+            txt.style.color = '#B91C1C';
+            if(quizTimerInterval) clearInterval(quizTimerInterval);
+        } else {
+            var minsLeft = Math.ceil(diff / 60000);
+            if (minsLeft === 1) {
+               txt.innerText = "Minder dan 1 minuut over";
+               txt.style.color = '#EA580C';
+            } else {
+               txt.innerText = "Nog " + minsLeft + " minuten";
+               txt.style.color = '#D32F2F';
+            }
+        }
+    }
+
+    update();
+    if (quizTimerInterval) clearInterval(quizTimerInterval);
+    quizTimerInterval = setInterval(update, 1000);
+  }
+
+  function startQuiz() {
+    if (quizHasVideo && !videoCompleted) {
+      return showModal("Bekijk eerst de instructievideo volledig voordat je de toets kunt starten.");
+    }
+    userEmailNaam = "";
+
+    if (ytPlayer && ytPlayer.stopVideo) {
+      try { ytPlayer.stopVideo(); } catch(e) {}
+    }
+    if (videoTimerInterval) clearInterval(videoTimerInterval);
+    var vIframe = document.getElementById('quiz-video-iframe');
+    if (vIframe) vIframe.src = "";
+
+    startTime = new Date(); 
+    document.getElementById('quiz-start').classList.add('hidden');
+    
+    var c = document.getElementById('quiz-questions'); 
+    c.innerHTML = ""; 
+    c.classList.remove('hidden');
+
+    var maxMins = parseFloat(quiz.meta.maxTijd) || 0;
+    if (maxMins > 0) {
+       c.innerHTML += `
+       <div id="quiz-timer-container" style="background-color: #FEF2F2; border: 2px solid #D32F2F; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px; color: #D32F2F; font-weight: bold; font-size: 18px;">
+             <span class="material-icons">timer</span>
+             <span id="quiz-timer-text">Tijd berekenen...</span>
+          </div>
+          <button onclick="toggleTimer()" style="background: none; border: none; color: #D32F2F; cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: bold; font-size: 12px; text-transform: uppercase;">
+             <span class="material-icons" id="quiz-timer-icon">visibility_off</span> <span class="hidden sm:inline">Verberg</span>
+          </button>
+       </div>`;
+    }
+    
+    quiz.vragen.forEach(function(q, i) {
+      var isMulti = q.multipleAnswers === true;
+      var type = isMulti ? "checkbox" : "radio";
+      
+      var optHtml = '';
+      q.opties.forEach(function(o, oi) {
+        optHtml += `
+          <label class="flex items-center p-4 border rounded-lg mb-2 hover:bg-slate-50 cursor-pointer">
+            <input type="${type}" name="q${i}" value="${oi+1}" class="mr-4 w-5 h-5 shrink-0 accent-[#D32F2F]">
+            <span class="font-medium text-slate-700">${escapeHtmlValue(o)}</span>
+          </label>`;
+      });
+      
+      var badgeHtml = isMulti ? '<p class="text-xs text-[#D32F2F] bg-red-50 inline-block px-2 py-1 rounded mb-4 font-bold">Meerdere antwoorden mogelijk</p>' : '';
+      var imgHtml = q.afbeelding ? `<img src="${escapeHtmlValue(q.afbeelding)}" class="mb-6 max-w-full rounded border">` : '';
+      
+      c.innerHTML += `
+        <div id="q-block-${i}" class="card p-8 ${i===0 ? '' : 'hidden'}">
+          <div class="text-sm font-bold text-slate-400 uppercase mb-4">Vraag ${i+1} van ${quiz.vragen.length}</div>
+          <h3 class="font-bold text-xl mb-4">${escapeHtmlValue(q.vraag)}</h3>
+          ${badgeHtml}
+          ${imgHtml}
+          <div>${optHtml}</div>
+        </div>`;
+    });
+    
+    c.innerHTML += `
+      <div class="flex gap-4 mt-6">
+        <button id="btn-prev" onclick="navQuiz(-1)" class="btn-outline w-full py-4 hidden">Vorige</button>
+        <button id="btn-next" onclick="navQuiz(1)" class="btn-primary w-full py-4">Volgende</button>
+        <button id="btn-submit" onclick="submitQuiz()" class="btn-primary w-full py-4 hidden" style="background:#2E7D32">Inleveren</button>
+      </div>`;
+      
+    updateQuizNav();
+
+    if (maxMins > 0) {
+        startTimerDisplay();
+    }
+  }
+
+  function navQuiz(dir) { 
+    document.getElementById(`q-block-${currentQuestionIndex}`).classList.add('hidden'); 
+    currentQuestionIndex += dir; 
+    document.getElementById(`q-block-${currentQuestionIndex}`).classList.remove('hidden'); 
+    
+    updateQuizNav(); 
+    window.scrollTo({top:0, behavior:'smooth'}); 
+  }
+  
+  function updateQuizNav() { 
+    document.getElementById('btn-prev').classList[currentQuestionIndex===0 ? 'add' : 'remove']('hidden'); 
+    var isLast = currentQuestionIndex === quiz.vragen.length - 1; 
+    
+    document.getElementById('btn-next').classList[isLast ? 'add' : 'remove']('hidden'); 
+    document.getElementById('btn-submit').classList[isLast ? 'remove' : 'add']('hidden'); 
+  }
+
+  function submitQuiz() {
+    for (var i = 0; i < quiz.vragen.length; i++) { 
+      if (!document.querySelector(`input[name="q${i}"]:checked`)) { 
+        showModal(`Let op: Je hebt vraag ${i+1} nog niet beantwoord.`); 
+        
+        document.getElementById(`q-block-${currentQuestionIndex}`).classList.add('hidden'); 
+        currentQuestionIndex = i; 
+        document.getElementById(`q-block-${currentQuestionIndex}`).classList.remove('hidden'); 
+        
+        updateQuizNav(); 
+        return; 
+      } 
+    }
+
+    if (quizTimerInterval) {
+       clearInterval(quizTimerInterval);
+    }
+    
+    var answers = [];
+    quiz.vragen.forEach(function(q, i) {
+      var checkedInputs = Array.from(document.querySelectorAll(`input[name="q${i}"]:checked`)); 
+      answers.push({
+        questionId: q.id,
+        values: checkedInputs.map(function(el) { return el.value; })
+      });
+    });
+
+    var submitTime = new Date();
+    var clientDuurSec = startTime ? Math.max(0, Math.round((submitTime.getTime() - startTime.getTime()) / 1000)) : 0;
+
+    finalResultData = { 
+      startTijd: startTime.toISOString(), 
+      duurSec: clientDuurSec,
+      answers: answers,
+      sid: sidFromServer, 
+      attemptToken: quizAttemptToken,
+      kandidaatNaam: userEmailNaam
+    };
+    
+    document.getElementById('quiz-questions').classList.add('hidden'); 
+    document.getElementById('quiz-finish').classList.remove('hidden'); 
+    document.getElementById('result-text').innerText = "Je inzending wordt gecontroleerd en opgeslagen...";
+    document.getElementById('insight-container').innerHTML = "";
+    window.scrollTo({top:0, behavior:'smooth'}); 
+
+    if (typeof google !== 'undefined') {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          finalResultData.score = result.score;
+          finalResultData.correct = result.correct;
+          finalResultData.total = result.total;
+          finalResultData.details = result.details;
+          finalResultData.toetsNaam = quiz.meta.naam;
+          finalResultData.toetsId = tIdFromServer;
+          finalResultData.norm = result.norm;
+          finalResultData.finalStatus = result.finalStatus;
+          finalResultData.datum = new Date().toLocaleDateString('nl-NL');
+
+          document.getElementById('result-text').innerHTML = `Score: ${result.score}% (Minimaal benodigd: ${result.norm}%). Status: ${result.finalStatus}<br><span class="text-sm font-normal mt-2 inline-block text-slate-500">Gemaakt op: ${finalResultData.datum}</span>`;
+
+          var toonAntw = (quiz.meta.toonAntwoorden !== false && String(quiz.meta.toonAntwoorden).toUpperCase() !== "FALSE");
+          var insightHtml = result.details.map(function(detail) {
+            var uitlegHtml = detail.uitleg ? `<div class="mt-2 text-xs text-slate-600 italic bg-white/50 p-2 rounded border border-slate-200"><b>Uitleg:</b> ${escapeHtmlValue(detail.uitleg)}</div>` : '';
+            var correctHtml = (detail.isCorrect || !toonAntw) ? '' : '<br><b style="color:#D32F2F;font-size:12px;">Correct: ' + escapeHtmlValue(detail.correctAnswer) + '</b>';
+            return `<div class="p-4 border-b ${detail.isCorrect ? 'bg-green-50' : 'bg-red-50'}"><b>${escapeHtmlValue(detail.question)}</b><br><span class="text-sm">Jouw antwoord: ${escapeHtmlValue(detail.givenAnswer)}</span> ${correctHtml}${uitlegHtml}</div>`;
+          }).join('');
+          document.getElementById('insight-container').innerHTML = insightHtml;
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('result-text').innerText = "Je inzending kon niet definitief worden opgeslagen. Neem contact op met beheer.\nFout: " + err.message;
+        })
+        .submitQuizResult(finalResultData, tIdFromServer);
+    }
+  }
+</script>

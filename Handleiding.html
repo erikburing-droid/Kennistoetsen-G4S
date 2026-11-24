@@ -1,0 +1,483 @@
+<style>
+  .hand-sec { margin-bottom: 40px; }
+  .hand-title { color: #D32F2F; border-bottom: 2px solid #D32F2F; padding-bottom: 5px; margin-bottom: 20px; font-size: 1.25rem; font-weight: 800; text-transform: uppercase; }
+  .hand-sub { font-weight: bold; color: #232323; margin-top: 25px; margin-bottom: 10px; font-size: 1.1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;}
+  .hand-sub-sub { font-weight: 700; color: #334155; margin-top: 15px; margin-bottom: 5px; font-size: 0.95rem; }
+  .hand-text { color: #475569; font-size: 0.875rem; line-height: 1.7; margin-bottom: 15px; }
+  .hand-alert { background-color: #FEF2F2; border-left: 4px solid #D32F2F; padding: 15px; border-radius: 4px; margin: 15px 0; font-size: 0.875rem; color: #B91C1C; }
+  .hand-info { background-color: #E3F2FD; border-left: 4px solid #1565C0; padding: 15px; border-radius: 4px; margin: 15px 0; font-size: 0.875rem; color: #0D47A1; }
+  .hand-list { list-style-type: disc; margin-left: 20px; margin-bottom: 15px; color: #475569; font-size: 0.875rem; line-height: 1.7; }
+  .hand-list li { margin-bottom: 6px; }
+  
+  /* Stroomdiagram Specifieke Styling (Responsief en PDF Proof) */
+  .flow-container { background: #f8fafc; padding: 30px; border-radius: 8px; border: 1px solid #e2e8f0; overflow-x: auto; font-family: 'Segoe UI', sans-serif; }
+  .swimlane-table { width: 100%; min-width: 800px; border-collapse: collapse; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); table-layout: fixed; }
+  .swimlane-table th { background: #1e293b; color: white; padding: 15px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; width: 33.33%; border: 1px solid #334155; text-align: center; }
+  .swimlane-table td { padding: 20px; border: 1px dashed #cbd5e1; vertical-align: middle; position: relative; }
+  
+  .flow-box { background: #10b981; color: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 12px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; z-index: 2; margin: 0 auto; width: 90%; }
+  .flow-box.start { background: #D32F2F; border-radius: 20px; }
+  .flow-box.decision { background: #f59e0b; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); padding: 20px 10px; height: 80px; display: flex; align-items: center; justify-content: center; width: 80px; margin: 0 auto; }
+  
+  /* Verticale Pijlen (Omlaag) */
+  .flow-arrow-down { position: absolute; left: 50%; bottom: -35px; width: 2px; height: 35px; background: #94a3b8; transform: translateX(-50%); z-index: 1; }
+  .flow-arrow-down::after { content: ''; position: absolute; bottom: -2px; left: -4px; border-width: 5px 5px 0; border-style: solid; border-color: #94a3b8 transparent transparent transparent; }
+  
+  /* Horizontale Pijlen (Rechts en Links) gebaseerd op perfecte procenten! */
+  .td-arrow-right { position: absolute; top: 50%; left: 50%; width: 55%; height: 2px; background: #94a3b8; z-index: 1; transform: translateY(-50%); }
+  .td-arrow-right::after { content: ''; position: absolute; right: -2px; top: -4px; border-width: 5px 0 5px 5px; border-style: solid; border-color: transparent transparent transparent #94a3b8; }
+  
+  .td-arrow-left { position: absolute; top: 50%; right: 50%; width: 55%; height: 2px; background: #94a3b8; z-index: 1; transform: translateY(-50%); }
+  .td-arrow-left::after { content: ''; position: absolute; left: -2px; top: -4px; border-width: 5px 5px 5px 0; border-style: solid; border-color: transparent #94a3b8 transparent transparent; }
+
+  /* Print Styles */
+  @media print {
+    body * { visibility: hidden; }
+    header, .sidebar { display: none !important; }
+    #manualPrintArea, #manualPrintArea * { visibility: visible; }
+    #manualPrintArea { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+    .no-print { display: none !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    
+    .swimlane-table { min-width: 100% !important; width: 100% !important; }
+    .flow-box { font-size: 10px !important; padding: 8px 4px !important; }
+    .flow-box.decision { width: 70px !important; height: 70px !important; }
+  }
+</style>
+
+<div class="card p-8 shadow-lg">
+  
+  <div class="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-4 border-b-4 border-[#D32F2F] no-print">
+    <div>
+      <h1 class="text-3xl font-black text-[#232323] m-0 tracking-tight">HANDLEIDING <span class="text-[#D32F2F]">BEHEER</span></h1>
+      <p class="text-slate-500 font-medium mt-1">Gedetailleerde proces- en systeemdocumentatie voor het Operation Support Team, Aanvragers & Toetsenmakers</p>
+    </div>
+    <div class="flex gap-2 mt-4 md:mt-0">
+      <button onclick="openManualNewTab()" class="btn-outline font-bold text-sm flex items-center gap-1">
+        <span class="material-icons text-[18px]">open_in_new</span> Nieuw tabblad
+      </button>
+      <button onclick="printManualToPDF()" class="btn-outline font-bold text-sm flex items-center gap-1 hover:text-[#D32F2F] hover:border-[#D32F2F]">
+        <span class="material-icons text-[#D32F2F] text-[18px]">picture_as_pdf</span> Opslaan als PDF
+      </button>
+    </div>
+  </div>
+
+  <div id="manualPrintArea">
+
+    <div class="hand-sec">
+      <h2 class="hand-title">1. Inleiding & Systeemvereisten</h2>
+      <p class="hand-text">Welkom in het G4S Kennistoetsen Portaal. Dit webportaal is ontworpen om het volledige proces rondom kennistoetsen (aanvragen, ontwerpen, goedkeuren, distribueren, afnemen en rapporteren) te centraliseren en automatiseren. De applicatie draait volledig binnen de veilige kaders van de G4S Google Workspace.</p>
+      
+      <h3 class="hand-sub">Wie gebruikt dit portaal?</h3>
+      <ul class="hand-list">
+        <li><b>Systeembeheerders (OST):</b> Hebben toegang tot alles. Ze keuren nieuwe aanvragen goed, beheren gebruikers, passen instellingen aan en kunnen alle resultaten van heel G4S inzien.</li>
+        <li><b>Toetsenmakers & Aanvragers:</b> Medewerkers die het initiatief nemen om een toets te maken. Zij kunnen via de Aanvrager-flow concepten maken en indienen. Zodra goedgekeurd, beheren zij hun eigen toets(en).</li>
+        <li><b>Managers (Gebruikers):</b> Hebben 'kijkrechten' over hun eigen team. Ze kunnen resultaten inzien en groepsrapportages genereren als zij als manager gekoppeld zijn aan een toets.</li>
+        <li><b>Kandidaten:</b> Zien dit beheerportaal <i>nooit</i>. Zij krijgen bij het openen van een beveiligde toets-link direct een vereenvoudigd startscherm te zien.</li>
+      </ul>
+
+      <div class="hand-info"><b>Technische Vereiste:</b> Omdat het systeem leunt op de veilige G4S Google structuur, is actieve toegang met een G4S-account (UPN) 100% verplicht voor zowel beheerders als kandidaten.</div>
+    </div>
+
+    <div class="hand-sec">
+      <h2 class="hand-title">2. Dashboards (Statistieken)</h2>
+      <p class="hand-text">Het portaal biedt twee verschillende weergaven om de status van alle uitgezette toetsen te monitoren.</p>
+
+      <h3 class="hand-sub">2.1 Standaard Dashboard</h3>
+      <p class="hand-text">Het standaard dashboard biedt een "live" (real-time) overzicht van de gemaakte en openstaande toetsen. Dit is handig voor een snelle blik op de werkvoorraad.</p>
+      <ul class="hand-list">
+        <li><b>Onderhoudsknop (Alleen Admin):</b> Met de "Onderhoud AAN/UIT" knop in de zijbalk kun je het portaal tijdelijk vergrendelen voor kandidaten. Handig tijdens kritieke systeemupdates. Iedereen die de toets probeert te openen krijgt een onderhoudsmelding.</li>
+        <li><b>Tellers:</b> Direct inzicht in Totalen, Openstaand (uitgenodigd maar nog niet afgerond) en Afgerond (Geslaagd/Gezakt).</li>
+      </ul>
+
+      <h3 class="hand-sub">2.2 PowerBI Dashboard</h3>
+      <p class="hand-text">Dit dashboard is ontworpen voor diepgaande data-analyse en werkt op basis van <i>cascading filters</i> (filters die slim met elkaar samenwerken).</p>
+      <ul class="hand-list">
+        <li><b>Interactieve Filters:</b> Je kunt de data doorsnijden op Regio, Klant, Manager of Toets.</li>
+        <li><b>Detailgegevens (Inzage in vragen):</b> Onder de grafieken staat een datatabel. Klik op een rij in de tabel om een detailvenster (modal) te openen. Hierin zie je niet alleen de contactgegevens, maar ook <b>exact welke vragen</b> deze kandidaat fout heeft beantwoord (inclusief het gegeven en correcte antwoord).</li>
+      </ul>
+    </div>
+
+    <div class="hand-sec">
+      <h2 class="hand-title">3. Toetsen Aanmaken, Aanvragen & Wijzigen</h2>
+      <p class="hand-text">Het systeem kent een uitgebreid proces om de kwaliteit van nieuwe toetsen te borgen voordat ze definitief naar kandidaten verstuurd kunnen worden.</p>
+
+      <h3 class="hand-sub">3.1 Het Aanvraagproces (Fase 2)</h3>
+      <p class="hand-text">Medewerkers zonder systeembeheer-rechten komen bij het inloggen in het speciale <b>Aanvrager Dashboard</b> terecht. Hier kunnen zij zelfstandig een nieuwe toets ontwerpen of inladen, zonder direct live data te beïnvloeden.</p>
+      <ul class="hand-list">
+        <li><b>Concepten Opslaan:</b> Tijdens het ontwerpen kun je op elk moment klikken op "Tussentijds Opslaan Als Concept". De toets wordt dan veilig in je eigen 'Mijn Concepten' lijst geplaatst, zodat je er later verder aan kunt werken.</li>
+        <li><b>Indienen ter Goedkeuring:</b> Is de toets af? Klik dan op Indienen. De toets verdwijnt uit je concepten en wordt in de 'Wachtrij' van het Operation Support Team (OST) geplaatst. Zij ontvangen hier direct een e-mailnotificatie van.</li>
+        <li><b>Goedkeuring:</b> Zodra het OST de toets goedkeurt, wordt deze live gezet. Jij krijgt een mailtje en vanaf dat moment heb je automatisch beheer- en distributierechten over deze toets.</li>
+      </ul>
+
+      <h3 class="hand-sub">3.2 De Toets Editor</h3>
+      <p class="hand-text">De Toets Editor is het hart van de applicatie waar je instellingen en vragen beheert.</p>
+      
+      <h4 class="hand-sub-sub">Algemene Toets Instellingen</h4>
+      <ul class="hand-list">
+        <li><b>Naam Toets, Regio & Klant:</b> Zorgvuldige invulling is verplicht voor kloppende statistieken in PowerBI.</li>
+        <li><b>Manager Naam & Email:</b> Aan wie behoort deze toets toe? Via "Extra manager toevoegen" kun je meerdere leidinggevenden koppelen. Zij krijgen vervolgens automatisch 'kijkrechten'.</li>
+        <li><b>Stuur e-mail notificatie manager:</b> Als dit vinkje aan staat, krijgen de ingevulde managers bij <i>elke</i> afgeronde toets direct een notificatie en het PDF-rapport. <i>Zet dit uit bij bulk-uitnodigingen om spam te voorkomen!</i></li>
+        <li><b>Toon antwoorden aan kandidaat:</b> Deze schakelaar bepaalt of de kandidaat na afloop (op het inzichtenscherm én op de PDF) te zien krijgt <b>wát</b> het correcte antwoord had moeten zijn bij een fout. Zet dit UIT bij strenge examens om spieken/delen van antwoorden te voorkomen.</li>
+      </ul>
+
+      <h4 class="hand-sub-sub">Vragen Beheren</h4>
+      <ul class="hand-list">
+        <li><b>Correct (1,2..):</b> Typ hier het cijfer van het juiste antwoord. Wil je een <i>"Meerdere antwoorden mogelijk"</i> vraag maken? Typ de cijfers dan gescheiden met een komma (bijv. <code>1,3</code>).</li>
+        <li><b>Verplichte vraag:</b> Vragen met dit vinkje worden altijd gesteld, zelfs als je de toets distribueert met een limiet (bijv. stuur slechts 10 van de 50 beschikbare vragen naar de kandidaat).</li>
+        <li><b>Afbeeldingen:</b> De editor ondersteunt live uploads. Foto's worden netjes opgeslagen in toegewezen Google Drive mappen (gescheiden voor Concepten en Live Toetsen).</li>
+      </ul>
+    </div>
+
+    <div class="hand-sec">
+      <h2 class="hand-title">4. Applicatie Beheer & Wachtrij (Voor OST)</h2>
+      <p class="hand-text">Dit gedeelte is afgeschermd en alleen toegankelijk voor Systeembeheerders (Operation Support Team).</p>
+
+      <h3 class="hand-sub">4.1 De Aanvragen Wachtrij</h3>
+      <p class="hand-text">Zodra een medewerker een nieuwe toets indient, zie je links in het menu een rode badge met het aantal openstaande aanvragen verschijnen.</p>
+      <ul class="hand-list">
+        <li>Ga naar "Aanvragen Wachtrij" en klik op "Beoordelen".</li>
+        <li>De Toets Editor opent in <b>Review Modus</b>. Alle velden zijn tijdelijk uitgeschakeld ter controle. Bovenin je scherm verschijnt de actiebalk.</li>
+        <li><b>Afkeuren:</b> De toets wordt permanent verwijderd (buiten de database gehouden).</li>
+        <li><b>Goedkeuren:</b> De toets wordt direct in de live database geschoten. De aanvrager ontvangt een automatische bevestigingsmail en krijgt direct de juiste rollen toegewezen.</li>
+      </ul>
+
+      <h3 class="hand-sub">4.2 Systeembeheer Tools</h3>
+      <ul class="hand-list">
+        <li><b>Gebruikers & Rechten:</b> Hier deel je handmatig rechten uit (zoals 'Systeembeheerder' of 'Toetsenmaker') op basis van UPN.</li>
+        <li><b>Impersonate:</b> Kun je gebruiken om als Support-medewerker virtueel mee te kijken door de ogen van een reguliere manager om te troubleshooten.</li>
+        <li><b>Mutatie Logboek:</b> Veiligheid en auditabiliteit staat voorop. Elke belangrijke actie (goedkeuren, verwijderen, forceren van een score, rechten toekennen) wordt onomkeerbaar vastgelegd in dit log.</li>
+        <li><b>Gedeelde Accounts (Aanvulling):</b> Bevat alle e-mailadressen van meldkamers, recepties en objecten. Zonder registratie in deze lijst weigert het systeem om groeps-uitnodigingen naar deze adressen te versturen.</li>
+      </ul>
+    </div>
+
+    <div class="hand-sec">
+      <h2 class="hand-title">5. Uitnodigingen Versturen (Planning)</h2>
+      <p class="hand-text">In de module "Versturen" bepaal je naar wie (en onder welke voorwaarden) de toets wordt gestuurd.</p>
+      
+      <h3 class="hand-sub border-b-0 pb-0 mb-2">Sessie Instellingen & Timers</h3>
+      <ul class="hand-list mt-3">
+        <li><b>Tijdslimiet (Minuten):</b> Vul hier een getal in (bijv. 30). Zodra de kandidaat start, loopt er een klok. <b>Let op: dit is een harde server-side limiet!</b> Zodra de tijd verstreken is, wordt de toets afgekeurd met de status <i>"Gezakt (Tijd overschreden)"</i>, ongeacht de score. Vul <b>0</b> in voor geen tijdslimiet.</li>
+        <li><b>Aantal Vragen:</b> Geef op hoeveel van de beschikbare vragen de kandidaat mag krijgen. Handig voor een grote poule van vragen.</li>
+        <li><b>Herhaling (Dagen):</b> Vul bijv. <code>365</code> in om het systeem na exact één jaar volautomatisch een nieuwe uitnodiging te laten sturen naar kandidaten die geslaagd zijn.</li>
+      </ul>
+
+      <h3 class="hand-sub border-b-0 pb-0 mb-2">Type Account (Routering / Zéér Belangrijk)</h3>
+      <div class="bg-slate-50 border border-slate-200 rounded p-5 mb-4 mt-3">
+        <ul class="list-none text-sm text-slate-700 space-y-6">
+          <li class="flex items-start gap-3">
+            <span class="material-icons text-[#D32F2F] mt-0.5 text-2xl">person</span>
+            <div>
+              <b class="uppercase tracking-wide text-base">1. Persoonlijk Account (Standaard)</b><br>
+              Plak de G4S werkaccounts (UPN's) in het vak <i>Ontvangers</i>. <br>
+              <b>Wat doet de app?</b> Het systeem zoekt zélf in HR-lijsten naar het gekoppelde <b>privé</b> e-mailadres en stuurt de uitnodiging daarheen. <i>Ideaal voor reguliere beveiligers.</i>
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="material-icons text-blue-600 mt-0.5 text-2xl">badge</span>
+            <div>
+              <b class="uppercase tracking-wide text-base">2. Binnen G4S (GPL en Coördinator)</b><br>
+              <b>Wat doet de app?</b> De uitnodiging komt direct aan in de Outlook van het ingevoerde werkaccount. Géén routing naar privémail.
+            </div>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="material-icons text-orange-500 mt-0.5 text-2xl">groups</span>
+            <div>
+              <b class="uppercase tracking-wide text-base">3. Gedeeld Account G4S (bijv. balie@...)</b><br>
+              <b>Wat doet de app?</b> Herhaling wordt direct geblokkeerd om oneindige loops te voorkomen. Zorg dat het e-mailadres bekend is in het beheer onder 'Gedeelde Accounts'.
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="hand-sec">
+      <h2 class="hand-title">6. Resultaten, PDF's & Rapportages</h2>
+      <p class="hand-text">In het "Resultaten" overzicht zie je de status van alle uitgezette toetsen.</p>
+      
+      <h3 class="hand-sub">6.1 Individuele Acties & Export</h3>
+      <p class="hand-text">In het "Resultaten" overzicht heb je diverse tools tot je beschikking:</p>
+      <ul class="hand-list">
+        <li><b>PDF (Rode Document):</b> Genereert <i>on the fly</i> een digitaal certificaat met score én foutenanalyse voor een specifieke kandidaat.</li>
+        <li><b>Herkansing (Oranje Icoon):</b> Verschijnt uitsluitend bij kandidaten met de status <i>Gezakt</i>. Met één klik wijs je een nieuwe poging toe, waarna de kandidaat een speciale herkansings-mail krijgt.</li>
+        <li><b>Bewerken (Blauwe Potlood):</b> Forceer een resultaat in de database handmatig van Gezakt naar Geslaagd (of vice versa).</li>
+        <li><b>Openstaand (Excel) Knop:</b> Als je rechtsboven (naast de CSV knop) hierop klikt, genereert het systeem op de achtergrond een kersverse Excel (Google Sheet) met een overzicht van alle kandidaten die een specifieke toets <i>nog niet</i> hebben gemaakt (inclusief het 'verstuurd naar' e-mailadres).</li>
+      </ul>
+
+      <h3 class="hand-sub">6.2 Groepsrapport (Rode knop rechtsboven)</h3>
+      <p class="hand-text">Wil je weten waar de knelpunten in de werkinstructies zitten? Gebruik dan het Groepsrapport.</p>
+      <ul class="hand-list">
+        <li>Het systeem bouwt een PDF met niet alleen de slagingspercentages van de groep, maar vooral: <b>Een opgetelde foutenanalyse.</b> Je ziet in één oogopslag welke 3 vragen binnen de groep het állervaakst verkeerd zijn beantwoord.</li>
+      </ul>
+    </div>
+
+    <div class="hand-sec">
+      <h2 class="hand-title">7. Systeem Stroomdiagrammen (Visueel Proces)</h2>
+      <p class="hand-text">Hieronder vind je de visuele weergave van de twee belangrijkste flows binnen de applicatie.</p>
+
+      <h3 class="hand-sub">A. Aanvraag- en Goedkeuringsproces (Fase 2 Flow)</h3>
+      <div class="flow-container mb-12">
+        <table class="swimlane-table">
+          <thead>
+            <tr>
+              <th style="background:#0f172a;">AANVRAGER / MEDEWERKER</th>
+              <th style="background:#1e293b;">SYSTEEM (APP)</th>
+              <th style="background:#334155;">OPERATION SUPPORT TEAM (OST)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="flow-box start" style="background:#2563eb;">Start: Ontwerpt Toets<div class="flow-arrow-down"></div></div>
+              </td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="flow-box" style="background:#3b82f6;">Slaat tussentijds op als Concept<div class="flow-arrow-down"></div></div>
+              </td>
+              <td>
+                <div class="flow-box">Registreert in Concept Data<div class="flow-arrow-down"></div></div>
+              </td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="flow-box" style="background:#3b82f6;">Drukt op "Indienen ter goedkeuring"</div>
+                <div class="td-arrow-right"></div>
+              </td>
+              <td>
+                <div class="flow-box">Verplaatst naar Wachtrij &<br>Stuurt Mail naar OST</div>
+                <div class="td-arrow-right"></div>
+              </td>
+              <td>
+                <div class="flow-box" style="background:#64748b;">Ziet notificatie &<br>Opent Aanvragen Wachtrij<div class="flow-arrow-down"></div></div>
+              </td>
+            </tr>
+            <tr>
+              <td></td>
+              <td></td>
+              <td>
+                <div class="flow-box decision" style="background:#8b5cf6;">Beoordelen<br>In Editor</div>
+                <div class="td-arrow-left"></div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="flow-box" style="background:#ef4444;">Ontvangt AFWIJZING (Einde)</div>
+              </td>
+              <td>
+                <div class="flow-box" style="background:#f43f5e; color:white;">AFGEKEURD<br>Data wordt definitief gewist</div>
+                <div class="td-arrow-left"></div>
+              </td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="flow-box" style="background:#10b981;">Krijgt "Goedgekeurd" e-mail &<br>Krijgt direct Beheerdersrol!</div>
+                <div class="td-arrow-left"></div>
+              </td>
+              <td>
+                <div class="flow-box">GOEDGEKEURD<br>Toets wordt gepromoveerd naar Live</div>
+                <div class="td-arrow-right"></div>
+              </td>
+              <td>
+                <div class="flow-box" style="background:#10b981;">Toets is nu zichtbaar voor planning</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="hand-sub">B. Verzend-, Inlog- & Resultatenproces (Kandidaat Flow)</h3>
+      <div class="flow-container mt-6">
+        <table class="swimlane-table">
+          <thead>
+            <tr>
+              <th style="background:#1e293b;">1. TOETSENMAKER / BEHEER</th>
+              <th style="background:#1e293b;">2. SYSTEEM (APP)</th>
+              <th style="background:#1e293b;">3. KANDIDAAT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="flow-box start">Kiest Toets & Plakt E-mailadressen<div class="flow-arrow-down"></div></div>
+              </td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="flow-box decision">Type<br>Account?</div>
+                <div class="td-arrow-right"></div>
+              </td>
+              <td>
+                <div class="p-4 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 relative" style="width: 90%; margin: 0 auto;">
+                  <div class="text-[10px] font-bold text-slate-500 mb-1 text-center uppercase">Binnen G4S / Gedeeld</div>
+                  <div class="flow-box mb-6" style="width: 100%;">Behoudt ingevoerde adres &<br>Verstuurt beveiligde link</div>
+                  
+                  <div class="text-[10px] font-bold text-slate-500 mb-1 text-center uppercase">Persoonlijk</div>
+                  <div class="flow-box" style="width: 100%;">Zoekt privé-adres op &<br>Verstuurt beveiligde link</div>
+                </div>
+                <div class="td-arrow-right"></div>
+              </td>
+              <td>
+                <div class="flow-box">Ontvangt Uitnodigingsmail<br>& Klikt op Link<div class="flow-arrow-down"></div></div>
+              </td>
+            </tr>
+            <tr>
+              <td></td>
+              <td></td>
+              <td>
+                <div class="flow-box">AccountChooser Scherm:<br>Logt veilig in met G4S UPN<div class="flow-arrow-down"></div></div>
+              </td>
+            </tr>
+            <tr>
+              <td></td>
+              <td>
+                <div class="flow-box decision" style="height: auto; width:120px; padding:25px 10px;">Checkt Tijdlimiet<br>& Berekent Score</div>
+                <div class="flow-arrow-down"></div>
+              </td>
+              <td>
+                <div class="flow-box">Maakt & Rondt de Toets af</div>
+                <div class="td-arrow-left"></div>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <div class="flow-box">Ontvangt direct e-mail (optioneel)</div>
+              </td>
+              <td>
+                <div class="flow-box">Genereert PDF <br>& Verstuurt uitslag</div>
+                <div class="td-arrow-left"></div>
+                <div class="td-arrow-right"></div>
+              </td>
+              <td>
+                <div class="flow-box">Krijgt direct inzicht &<br>PDF Rapport in mailbox</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </div> <!-- Einde manualPrintArea -->
+</div>
+
+<script>
+  function openManualNewTab() {
+    const manualContent = document.getElementById('manualPrintArea').innerHTML;
+    const newWin = window.open('', '_blank');
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('nl-NL') + ' ' + now.toLocaleTimeString('nl-NL', {hour: '2-digit', minute:'2-digit'});
+    
+    newWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Handleiding Kennistoetsen G4S</title>
+          <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+          <style>
+            body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px 60px; max-width: 1000px; margin: 0 auto; color: #334155; line-height: 1.7; }
+            h2 { font-size: 24px; font-weight: 900; color: #232323; margin: 0 0 5px 0; text-transform: uppercase; }
+            .doc-meta { color: #64748b; font-size: 13px; margin: 0 0 20px 0; }
+            .divider { border-bottom: 4px solid #D32F2F; margin-bottom: 30px; }
+            
+            /* Basis stijlen voor de elementen overgenomen uit de app */
+            .hand-sec { margin-bottom: 40px; }
+            .hand-title { color: #D32F2F; border-bottom: 2px solid #D32F2F; padding-bottom: 5px; margin-bottom: 20px; font-size: 1.25rem; font-weight: 800; text-transform: uppercase; }
+            .hand-sub { font-weight: bold; color: #232323; margin-top: 25px; margin-bottom: 10px; font-size: 1.1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;}
+            .hand-sub-sub { font-weight: 700; color: #334155; margin-top: 15px; margin-bottom: 5px; font-size: 0.95rem; }
+            .hand-text { color: #475569; font-size: 0.875rem; line-height: 1.7; margin-bottom: 15px; }
+            .hand-alert { background-color: #FEF2F2; border-left: 4px solid #D32F2F; padding: 15px; border-radius: 4px; margin: 15px 0; font-size: 0.875rem; color: #B91C1C; }
+            .hand-info { background-color: #E3F2FD; border-left: 4px solid #1565C0; padding: 15px; border-radius: 4px; margin: 15px 0; font-size: 0.875rem; color: #0D47A1; }
+            .hand-list { list-style-type: disc; margin-left: 20px; margin-bottom: 15px; color: #475569; font-size: 0.875rem; line-height: 1.7; }
+            .hand-list li { margin-bottom: 6px; }
+            
+            /* Stroomdiagram Styling in nieuw tabblad */
+            .flow-container { background: #f8fafc; padding: 30px; border-radius: 8px; border: 1px solid #e2e8f0; overflow-x: auto; margin-top: 20px;}
+            .swimlane-table { width: 100%; min-width: 800px; border-collapse: collapse; background: white; table-layout: fixed; }
+            .swimlane-table th { color: white; padding: 15px; font-size: 12px; text-transform: uppercase; text-align: center; border: 1px solid #334155; width: 33.33%; }
+            .swimlane-table td { padding: 20px; border: 1px dashed #cbd5e1; vertical-align: middle; position: relative; }
+            
+            .flow-box { color: white; padding: 12px; border-radius: 6px; text-align: center; font-size: 12px; font-weight: bold; position: relative; z-index: 2; margin: 0 auto; width: 90%; }
+            .flow-box.start { border-radius: 20px; }
+            .flow-box.decision { padding: 20px 10px; height: auto; display: block; text-align: center; margin: 0 auto; border-radius: 4px;}
+            
+            .flow-arrow-down { position: absolute; left: 50%; bottom: -35px; width: 2px; height: 35px; background: #94a3b8; transform: translateX(-50%); z-index: 1; }
+            .flow-arrow-down::after { content: ''; position: absolute; bottom: -2px; left: -4px; border-width: 5px 5px 0; border-style: solid; border-color: #94a3b8 transparent transparent transparent; }
+            
+            .td-arrow-right { position: absolute; top: 50%; left: 50%; width: 55%; height: 2px; background: #94a3b8; z-index: 1; transform: translateY(-50%); }
+            .td-arrow-right::after { content: ''; position: absolute; right: -2px; top: -4px; border-width: 5px 0 5px 5px; border-style: solid; border-color: transparent transparent transparent #94a3b8; }
+            
+            .td-arrow-left { position: absolute; top: 50%; right: 50%; width: 55%; height: 2px; background: #94a3b8; z-index: 1; transform: translateY(-50%); }
+            .td-arrow-left::after { content: ''; position: absolute; left: -2px; top: -4px; border-width: 5px 5px 5px 0; border-style: solid; border-color: transparent #94a3b8 transparent transparent; }
+            
+            /* Hulp classes uit Tailwind overnemen voor diagram */
+            .flex { display: flex; }
+            .flex-col { flex-direction: column; }
+            .items-center { align-items: center; }
+            .justify-center { justify-content: center; }
+            .gap-4 { gap: 1rem; }
+            .gap-6 { gap: 1.5rem; }
+            .uppercase { text-transform: uppercase; }
+            .tracking-wide { letter-spacing: 0.025em; }
+            .text-base { font-size: 1rem; }
+            .text-slate-500 { color: #64748b; }
+            .text-xs { font-size: 0.75rem; }
+            .bg-slate-50 { background-color: #f8fafc; }
+            .border-slate-200 { border-color: #e2e8f0; }
+            .border-slate-300 { border-color: #cbd5e1; }
+            .border { border-width: 1px; border-style: solid; }
+            .border-2 { border-width: 2px; border-style: solid; }
+            .border-dashed { border-style: dashed; }
+            .rounded { border-radius: 0.25rem; }
+            .rounded-lg { border-radius: 0.5rem; }
+            .p-4 { padding: 1rem; }
+            .p-5 { padding: 1.25rem; }
+            .mb-1 { margin-bottom: 0.25rem; }
+            .mb-4 { margin-bottom: 1rem; }
+            .mb-6 { margin-bottom: 1.5rem; }
+            .mb-12 { margin-bottom: 3rem; }
+            .mt-1 { margin-top: 0.25rem; }
+            .mt-3 { margin-top: 0.75rem; }
+            .mt-6 { margin-top: 1.5rem; }
+            .mt-0\\.5 { margin-top: 0.125rem; }
+            .items-start { align-items: flex-start; }
+            .text-2xl { font-size: 1.5rem; }
+            .text-center { text-align: center; }
+            .w-full { width: 100%; }
+            .relative { position: relative; }
+            .font-bold { font-weight: bold; }
+            .text-\\[10px\\] { font-size: 10px; }
+            .text-\\[\\#D32F2F\\] { color: #D32F2F; }
+            .text-blue-600 { color: #2563eb; }
+            .text-orange-500 { color: #f97316; }
+            
+            /* Zorg dat het PDF/Print overzicht in het nieuwe tabblad óók perfect schaalt */
+            @media print {
+              .flow-container { padding: 0 !important; border: none !important; overflow: visible !important; margin-top: 10px !important; }
+              .swimlane-table { min-width: 100% !important; width: 100% !important; }
+              .flow-box { font-size: 10px !important; padding: 8px 4px !important; }
+              .flow-box.decision { width: 70px !important; height: 70px !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Handleiding Kennistoetsen G4S</h2>
+          <div class="doc-meta">Gegenereerd op: ` + dateStr + `</div>
+          <div class="divider"></div>
+          ` + manualContent + `
+        </body>
+      </html>
+    `);
+    newWin.document.close();
+  }
+
+  function printManualToPDF() {
+    window.print();
+  }
+</script>

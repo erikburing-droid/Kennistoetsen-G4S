@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G4S Kennistoetsen</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <?!= include('Css'); ?>
+  </head>
+  <body>
+    <!-- Loader -->
+    <div id="loader" class="loader-overlay">
+      <div class="spinner"></div>
+      <div class="mt-4 font-bold text-slate-600 tracking-wider">Laden...</div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[10001] items-center justify-center p-4">
+      <div class="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full text-center">
+        <div class="material-icons text-4xl text-[#D32F2F] mb-4">info</div>
+        <p id="modal-msg" class="text-slate-700 font-medium mb-6"></p>
+        <div class="flex gap-3 justify-center">
+          <button onclick="closeModal()" class="btn-outline">Sluiten</button>
+          <button id="modal-confirm-btn" class="btn-primary hidden">Bevestigen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDF Modal -->
+    <div id="pdf-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-80 z-[10000] flex flex-col items-center justify-start p-4 overflow-y-auto">
+        <div class="w-full max-w-4xl bg-white rounded-lg shadow-2xl mt-10 mb-10 overflow-hidden flex flex-col">
+            <div class="bg-slate-100 p-4 border-b flex justify-between items-center sticky top-0 z-10">
+                <div class="font-bold text-slate-700 flex items-center gap-2"><span class="material-icons">picture_as_pdf</span> Rapportage Preview</div>
+                <div class="flex gap-2">
+                    <button onclick="downloadActualPDF()" class="btn-primary text-xs py-2"><span class="material-icons text-[16px] mr-1">download</span> Download PDF</button>
+                    <button onclick="printActualPDF()" class="btn-outline text-xs py-2"><span class="material-icons text-[16px] mr-1">print</span> Print</button>
+                    <button onclick="askConfirmEmail()" class="btn-outline text-xs py-2 text-blue-600 border-blue-200 hover:bg-blue-50"><span class="material-icons text-[16px] mr-1">send</span> E-mail Rapport</button>
+                    <button onclick="closePDF()" class="btn-outline text-xs py-2 text-red-600 border-red-200 hover:bg-red-50"><span class="material-icons text-[16px] mr-1">close</span> Sluiten</button>
+                </div>
+            </div>
+            <div id="pdf-preview-content" class="p-8 bg-slate-200 w-full overflow-y-auto" style="min-height: 50vh;"></div>
+        </div>
+    </div>
+
+    <? if (mode === 'TOETS') { ?>
+      <!-- TOETS WEERGAVE (Kandidaat) -->
+      <div class="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
+         <div class="w-full max-w-2xl bg-white rounded-lg shadow-lg overflow-hidden border-t-4 border-[#D32F2F]">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <img src="<?= logoUrl ?>" class="h-[55px]">
+                <div class="font-bold text-slate-400 text-sm">G4S KENNISTOETS</div>
+            </div>
+            
+            <div id="quiz-start" class="p-8 text-center">
+                <div class="material-icons text-6xl text-slate-300 mb-4">school</div>
+                <h2 id="q-main-title" class="text-2xl font-black text-[#232323] mb-2 uppercase tracking-tight">Toets laden...</h2>
+                <h3 id="q-title" class="text-lg font-bold text-[#D32F2F] mb-6">Een moment geduld</h3>
+                <div id="q-meta-info" class="text-sm text-slate-500 mb-8 bg-slate-50 p-4 rounded inline-block text-left border border-slate-100">
+                   Gegevens worden opgehaald...
+                </div>
+
+                <!-- VIDEO CONTAINER (Alleen actief indien toets een video heeft) -->
+                <div id="quiz-video-container" class="hidden mb-6 text-left">
+                   <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded mb-3 text-xs text-amber-800 font-medium flex items-center gap-2">
+                      <span class="material-icons text-amber-600 text-sm">info</span>
+                      <span><strong>Instructievideo:</strong> Bekijk de onderstaande video volledig voordat je de toets kunt starten.</span>
+                   </div>
+                   <div class="relative w-full rounded-lg overflow-hidden shadow border border-slate-200 bg-black" style="padding-top: 56.25%;">
+                      <div id="quiz-video-player" class="absolute top-0 left-0 w-full h-full"></div>
+                      <iframe id="quiz-video-iframe" class="hidden absolute top-0 left-0 w-full h-full" src="" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>
+                   </div>
+                   <div id="video-countdown-box" class="mt-3 p-3 bg-slate-100 rounded text-center text-sm font-bold text-slate-700 flex items-center justify-center gap-2">
+                      <span class="material-icons text-[#D32F2F] text-lg" id="video-countdown-icon">hourglass_top</span>
+                      <span id="video-countdown-text">Video bekijken...</span>
+                   </div>
+                </div>
+                <br>
+                <button id="btn-start-now" disabled onclick="startQuiz()" class="btn-primary w-full max-w-xs mx-auto py-4 text-lg uppercase tracking-wider shadow-lg">Laden...</button>
+            </div>
+
+            <div id="quiz-questions" class="hidden bg-slate-50 p-6"></div>
+
+            <div id="quiz-finish" class="hidden p-8 text-center">
+                <div class="material-icons text-6xl text-green-500 mb-4">task_alt</div>
+                <h2 class="text-2xl font-black text-[#232323] mb-2 uppercase tracking-tight">Toets Afgerond</h2>
+                <div id="result-text" class="text-lg font-bold text-[#D32F2F] mb-8 p-4 bg-red-50 rounded border border-red-100"></div>
+                <div id="insight-container" class="text-left bg-white border border-slate-200 rounded shadow-sm overflow-hidden mb-6 text-sm"></div>
+                <p class="text-slate-500 text-sm">Je kunt dit venster nu veilig sluiten.</p>
+            </div>
+         </div>
+      </div>
+    <? } else { ?>
+      <!-- BEHEER WEERGAVE (Admin/Manager) -->
+      <header>
+        <div class="flex items-center gap-4">
+          <img src="<?= logoUrl ?>" class="h-[55px]">
+          <div class="header-desktop-line h-8 w-[2px] bg-slate-200"></div>
+          <div class="header-desktop-title font-black text-xl tracking-tight text-[#232323]">KENNISTOETSEN <span class="text-[#D32F2F]">G4S</span></div>
+        </div>
+        <div class="flex items-center gap-4 text-right">
+          <button class="md:hidden text-slate-600" onclick="toggleMenu()"><span class="material-icons">menu</span></button>
+          <div class="text-right">
+            <div id="header-user-email" class="text-sm font-bold text-slate-700"><?= userEmail ?></div>
+            <div id="header-user-role" class="text-[10px] font-black text-[#D32F2F] uppercase tracking-widest">Laden...</div>
+          </div>
+          <button id="header-stop-imp" onclick="stopImpersonate()" class="hidden btn-primary text-xs py-1 px-3 bg-[#232323]">STOP IMPERSONATE</button>
+        </div>
+      </header>
+
+      <div id="main-sidebar" class="sidebar">
+        <div class="flex-grow overflow-y-auto py-4">
+          <div class="nav-category">Algemeen</div>
+          <div id="link-dashboard" class="nav-item active" onclick="show('dashboard', this)"><span class="material-icons">dashboard</span> Dashboard</div>
+          <div id="link-powerbi" class="nav-item" onclick="show('powerbi', this)"><span class="material-icons">bar_chart</span> PowerBI Dashboard</div>
+          <div id="link-results" class="nav-item" onclick="show('results', this)"><span class="material-icons">checklist</span> Resultaten</div>
+          <div id="link-handleiding" class="nav-item" onclick="show('handleiding', this)"><span class="material-icons">help_outline</span> Handleiding</div>
+
+          <div class="nav-category admin-only hidden">Beheer</div>
+          <div id="link-index" class="nav-item admin-only hidden" onclick="show('index', this)"><span class="material-icons">library_books</span> Toetsen Index</div>
+          <div id="link-aanvragen-wachtrij" class="nav-item admin-only hidden flex justify-between w-full" onclick="show('aanvragen-wachtrij', this)">
+            <div class="flex items-center"><span class="material-icons">move_to_inbox</span> Inkomende Aanvragen</div>
+            <span id="badge-aanvragen" class="bg-[#D32F2F] text-white text-[10px] font-bold px-2 py-0.5 rounded-full hidden">0</span>
+          </div>
+          <div id="link-gebruikers" class="nav-item admin-only hidden" onclick="show('gebruikers', this)"><span class="material-icons">manage_accounts</span> Gebruikersbeheer</div>
+          <div id="link-shared-accounts" class="nav-item admin-only hidden" onclick="show('shared-accounts', this)"><span class="material-icons">group_add</span> Gedeelde Accounts</div>
+          <div id="link-import" class="nav-item admin-only hidden" onclick="show('import', this)"><span class="material-icons">cloud_upload</span> Importeren</div>
+          <div id="link-impersonate" class="nav-item admin-only hidden" onclick="show('impersonate', this)"><span class="material-icons">people_alt</span> Impersonate</div>
+          <div id="link-logs" class="nav-item admin-only hidden" onclick="show('logs', this)"><span class="material-icons">history</span> Mutatie Logboek</div>
+
+          <div class="nav-category admin-only hidden">Uitvoering</div>
+          <div id="link-send" class="nav-item admin-only hidden" onclick="show('send', this)"><span class="material-icons">send</span> Versturen</div>
+        </div>
+        <div class="p-4 text-center border-t border-slate-700/50">
+          <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">G4S Nederland &copy; <span id="copy-year"></span></div>
+        </div>
+      </div>
+
+      <div class="admin-content">
+        <div id="imp-status-box" class="hidden mb-6 bg-yellow-400 text-yellow-900 px-4 py-2 rounded shadow-sm border border-yellow-500 flex items-center justify-center font-bold text-sm uppercase tracking-wide gap-2">
+            <span class="material-icons">visibility</span> <span id="imp-status-text">Je kijkt nu mee als...</span>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-200 pb-4 w-full">
+            <div>
+              <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">LIVE DASHBOARD</h2>
+              <p class="text-slate-500 text-sm mt-1 font-medium">Real-time status van alle toetsen en resultaten</p>
+            </div>
+            <div class="flex gap-2 mt-4 md:mt-0">
+              <button class="btn-outline text-xs" onclick="toggleHelpDrawer()"><span class="material-icons text-[16px]">help</span> Hulp</button>
+              <button id="btn-toggle-maint" class="admin-only hidden btn-outline text-xs" onclick="toggleMaintenance()">
+                <span class="material-icons text-[16px] text-[#D32F2F]">lock_open</span> <span id="text-maint">Onderhoud UIT</span>
+              </button>
+              <button class="btn-outline text-xs" onclick="lDash(true)"><span class="material-icons text-[16px]">refresh</span> Verversen</button>
+            </div>
+          </div>
+
+          <div class="card p-5 mb-6 !overflow-visible">
+            <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">FILTER WEERGAVE OP SPECIFIEKE TOETS</label>
+            <div id="dash-filter-toets-container"></div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="card p-6 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">TOTAAL ONTVANGEN</div>
+                <div id="stat-tot" class="text-4xl font-black text-[#232323]">0</div>
+              </div>
+              <div class="material-icons text-5xl text-slate-100">inbox</div>
+            </div>
+            <div class="card p-6 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-1">OPENSTAAND / BEZIG</div>
+                <div id="stat-bez" class="text-4xl font-black text-[#232323]">0</div>
+              </div>
+              <div class="material-icons text-5xl text-orange-50">hourglass_empty</div>
+            </div>
+            <div class="card p-6 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">SUCCESVOL AFGEROND</div>
+                <div id="stat-done" class="text-4xl font-black text-[#232323]">0</div>
+              </div>
+              <div class="material-icons text-5xl text-green-50">done_all</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="card p-8 flex flex-col items-center text-center">
+              <div class="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mb-4"><span class="material-icons text-3xl">sentiment_satisfied_alt</span></div>
+              <h3 class="text-lg font-black text-[#232323] uppercase text-green-600">GESLAAGD</h3>
+              <p class="text-xs font-medium text-slate-500 mb-6">Aantal personen dat de norm heeft behaald</p>
+              <div id="chart-geslaagd-count" class="text-5xl font-black text-green-700 mb-4">0</div>
+              <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative">
+                <div id="chart-geslaagd-bar" class="bg-green-600 h-full transition-all duration-1000" style="width: 0%"></div>
+              </div>
+              <div id="chart-geslaagd-perc" class="text-xs font-bold text-slate-400 mt-2">0%</div>
+            </div>
+            
+            <div class="card p-8 flex flex-col items-center text-center">
+              <div class="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4"><span class="material-icons text-3xl">sentiment_very_dissatisfied</span></div>
+              <h3 class="text-lg font-black text-[#232323] uppercase text-[#D32F2F]">GEZAKT</h3>
+              <p class="text-xs font-medium text-slate-500 mb-6">Aantal personen onder de minimale norm</p>
+              <div id="chart-gezakt-count" class="text-5xl font-black text-[#D32F2F] mb-4">0</div>
+              <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative">
+                <div id="chart-gezakt-bar" class="bg-[#D32F2F] h-full transition-all duration-1000" style="width: 0%"></div>
+              </div>
+              <div id="chart-gezakt-perc" class="text-xs font-bold text-slate-400 mt-2">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- POWERBI VIEW -->
+        <div id="view-powerbi" class="hidden">
+          <?!= include('Dashboard'); ?>
+        </div>
+
+        <!-- RESULTATEN VIEW -->
+        <div id="view-results" class="hidden">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-200 pb-4 w-full">
+            <div>
+              <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">RESULTATEN</h2>
+              <p class="text-slate-500 text-sm mt-1 font-medium">Inzage en rapportages van afgeronde toetsen</p>
+            </div>
+            <div class="flex gap-2 mt-4 md:mt-0 flex-wrap justify-start md:justify-end">
+              <button onclick="exportNogTeDoen()" class="btn-outline text-xs text-orange-600 border-orange-200 hover:bg-orange-50"><span class="material-icons text-[16px]">pending_actions</span> Openstaand (Excel)</button>
+              <button onclick="exportCSV()" class="btn-outline text-xs"><span class="material-icons text-[16px]">file_download</span> CSV Resultaten</button>
+              <button onclick="openGroupReportModal()" class="btn-primary text-xs py-2 bg-[#D32F2F]"><span class="material-icons text-[16px] mr-1">group</span> Groepsrapport</button>
+            </div>
+          </div>
+
+          <div class="card p-5 mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 bg-white border border-slate-200 !overflow-visible">
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">Toets Filter</label>
+              <div id="res-filter-quiz-container"></div>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">Datum Vanaf</label>
+              <input type="date" id="res-filter-date-start" class="w-full border border-slate-300 p-2 rounded text-sm focus:border-[#D32F2F] outline-none" onchange="filterResults()">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">Datum Tot</label>
+              <input type="date" id="res-filter-date-end" class="w-full border border-slate-300 p-2 rounded text-sm focus:border-[#D32F2F] outline-none" onchange="filterResults()">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">Zoek Kandidaat</label>
+              <div class="relative">
+                <span class="material-icons absolute left-3 top-2.5 text-slate-400 text-[18px]">search</span>
+                <input type="text" id="res-filter-search" class="w-full border border-slate-300 p-2 pl-10 rounded text-sm focus:border-[#D32F2F] outline-none" placeholder="E-mailadres..." onkeyup="filterResults()">
+              </div>
+            </div>
+          </div>
+
+          <div class="card overflow-x-auto border-t-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('datum')">Datum <span class="material-icons text-[14px] align-middle" id="sort-icon-datum">unfold_more</span></th>
+                  <th class="cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('email')">Deelnemer <span class="material-icons text-[14px] align-middle" id="sort-icon-email">unfold_more</span></th>
+                  <th class="cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('toetsNaam')">Toets <span class="material-icons text-[14px] align-middle" id="sort-icon-toetsNaam">unfold_more</span></th>
+                  <th class="cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('score')">Score <span class="material-icons text-[14px] align-middle" id="sort-icon-score">unfold_more</span></th>
+                  <th class="cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('norm')">Norm <span class="material-icons text-[14px] align-middle" id="sort-icon-norm">unfold_more</span></th>
+                  <th class="cursor-pointer hover:bg-slate-100 transition-colors" onclick="sortTable('status')">Status <span class="material-icons text-[14px] align-middle" id="sort-icon-status">unfold_more</span></th>
+                  <th class="text-right">Acties</th>
+                </tr>
+              </thead>
+              <tbody id="table-results-all"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- INDEX VIEW -->
+        <div id="view-index" class="hidden">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-200 pb-4 w-full">
+            <div>
+              <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">TOETSEN INDEX</h2>
+              <p class="text-slate-500 text-sm mt-1 font-medium">Beheer van alle vragenlijsten en configuraties (Live)</p>
+            </div>
+            <div class="flex gap-2 mt-4 md:mt-0">
+              <button id="btn-new-quiz" onclick="createNewQuiz()" class="btn-primary text-xs py-2"><span class="material-icons text-[16px] mr-1">add</span> Nieuwe Toets</button>
+            </div>
+          </div>
+          
+          <div class="card overflow-x-auto border-t-0">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Naam</th>
+                  <th>Manager(s)</th>
+                  <th>Norm</th>
+                  <th>Vragen</th>
+                  <th class="text-center" style="text-align:center;">Video</th>
+                  <th class="text-right" style="text-align:right;">Acties</th>
+                </tr>
+              </thead>
+              <tbody id="table-index"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- EDITOR VIEW -->
+        <div id="view-editor" class="hidden">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-200 pb-4 w-full">
+            <div>
+              <h2 id="editor-page-title" class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">TOETS EDITOR</h2>
+              <p id="editor-page-sub" class="text-slate-500 text-sm mt-1 font-medium">Maak of bewerk vragen en instellingen</p>
+            </div>
+            <div class="flex gap-2 mt-4 md:mt-0">
+              <button class="btn-outline text-xs text-blue-600 border-blue-200 bg-blue-50" onclick="alert('Instructie: Vul alle vereiste velden in. Verplichte vragen worden altijd getoond.')"><span class="material-icons text-[16px]">help</span> Uitleg Editor</button>
+              <button class="btn-outline text-xs" onclick="cancelEditor()"><span class="material-icons text-[16px]">close</span> Annuleren</button>
+            </div>
+          </div>
+
+          <div id="editor-review-bar" class="hidden card p-5 mb-6 bg-orange-50 border-l-4 border-orange-500 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h3 class="font-bold text-orange-800 uppercase tracking-wide m-0 text-sm">Beoordelingsmodus Actief</h3>
+                <p class="text-xs text-orange-700 m-0">Je bekijkt momenteel een ingediende aanvraag. Bewerkingsvelden zijn uitgeschakeld ter controle.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="afkeurenAanvraag()" class="btn-outline text-xs border-red-300 text-red-700 hover:bg-red-100 bg-white"><span class="material-icons text-[16px] mr-1">thumb_down</span> Afkeuren & Verwijderen</button>
+                <button onclick="goedkeurenAanvraag()" class="btn-primary text-xs bg-green-600 hover:bg-green-700"><span class="material-icons text-[16px] mr-1">thumb_up</span> Goedkeuren & Live Zetten</button>
+            </div>
+          </div>
+
+          <div id="editor-container" class="max-w-4xl mx-auto"></div>
+        </div>
+
+        <!-- AANVRAGEN WACHTRIJ VIEW -->
+        <div id="view-aanvragen-wachtrij" class="hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-200 pb-4 w-full">
+                <div>
+                    <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">INKOMENDE AANVRAGEN</h2>
+                    <p class="text-slate-500 text-sm mt-1 font-medium">Beoordeel en publiceer toetsen die door medewerkers zijn ontworpen</p>
+                </div>
+                <button onclick="loadAanvragenWachtrij()" class="btn-outline text-xs"><span class="material-icons text-[16px]">refresh</span> Verversen</button>
+            </div>
+            <div class="card overflow-hidden">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Aangevraagd Op</th>
+                            <th>Aanvrager</th>
+                            <th>Toets Naam</th>
+                            <th>Vragen</th>
+                            <th class="text-right">Acties</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-aanvragen-wachtrij"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- AANVRAGER DASHBOARD (FASE 2) -->
+        <div id="view-aanvrager-dash" class="hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b border-slate-200 pb-4 w-full">
+                <div>
+                    <h2 class="text-3xl font-black text-[#232323] m-0 tracking-tight uppercase">WELKOM AANVRAGER</h2>
+                    <p class="text-slate-500 text-base mt-1 font-medium">Ontwerp je eigen kennistoets en dien deze in voor goedkeuring.</p>
+                </div>
+                <div class="flex gap-2 mt-4 md:mt-0">
+                    <button class="btn-outline text-xs" onclick="toggleHelpDrawer()"><span class="material-icons text-[16px]">help</span> Hulp</button>
+                </div>
+            </div>
+
+            <div id="aanvrager-success-msg" class="hidden card p-6 bg-green-50 border-l-4 border-green-500 mb-8">
+                <div class="flex items-start gap-4">
+                    <span class="material-icons text-green-600 text-3xl mt-1">check_circle</span>
+                    <div id="aanvrager-success-text" class="text-green-800">
+                        <h3 class="font-bold text-lg">Aanvraag succesvol ingediend!</h3>
+                        <p class="text-sm">Het Operation Support Team (OST) zal je toets binnenkort beoordelen. Zodra deze is goedgekeurd, ontvang je een e-mail en krijg je direct beheer-rechten om hem uit te zetten.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div class="card p-8 flex flex-col justify-between border-t-4 border-blue-500 hover:shadow-lg transition-shadow cursor-pointer" onclick="startNieuweAanvraag(event)">
+                    <div>
+                        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-6">
+                            <span class="material-icons text-3xl">edit_document</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-[#232323] mb-3">1. Ontwerp in de Editor</h3>
+                        <p class="text-slate-600 text-sm mb-6 line-height-relaxed">Bouw je vragenlijst direct in onze interactieve editor. Voeg afbeeldingen toe, stel de juiste antwoorden in en bepaal de norm. Je kunt je werk tussentijds opslaan als concept.</p>
+                    </div>
+                    <button class="btn-primary w-full py-3 bg-blue-600 hover:bg-blue-700">START EDITOR</button>
+                </div>
+
+                <div class="card p-8 flex flex-col justify-between border-t-4 border-emerald-500 hover:shadow-lg transition-shadow cursor-pointer" onclick="window.open('https://sites.google.com/g4s.com/ost/functioneel-beheer/kennistoets-informatie?authuser=0', '_blank')">
+                    <div>
+                        <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
+                            <span class="material-icons text-3xl">language</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-[#232323] mb-3">2. Naar de Website</h3>
+                        <p class="text-slate-600 text-sm mb-6 line-height-relaxed">Bezoek onze website voor meer informatie, documentatie of om het officiële G4S Aanleverformulier te downloaden.</p>
+                    </div>
+                    <button class="btn-primary w-full py-3 bg-emerald-600 hover:bg-emerald-700">OPEN WEBSITE</button>
+                </div>
+            </div>
+
+            <div id="concepten-lijst" class="card p-6 hidden border-t-4 border-amber-500">
+                <h3 class="text-lg font-bold text-[#232323] mb-4 flex items-center gap-2">
+                    <span class="material-icons text-amber-500">save</span> Mijn Opgeslagen Concepten
+                </h3>
+                <p class="text-sm text-slate-500 mb-4">Hieronder vind je de toetsen waar je nog mee bezig bent. Klik op 'Verder Werken' om de editor te openen.</p>
+                <div id="concepten-lijst-container"></div>
+            </div>
+        </div>
+
+        <!-- IMPERSONATE VIEW -->
+        <div id="view-impersonate" class="hidden">
+          <div class="mb-6 border-b border-slate-200 pb-4 w-full">
+            <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">IMPERSONATE MODUS</h2>
+            <p class="text-slate-500 text-sm mt-1 font-medium">Kijk mee over de schouder van een manager (read-only)</p>
+          </div>
+          
+          <div class="card p-8 border-2 border-yellow-400 rounded-lg max-w-3xl bg-white shadow-sm mx-auto md:mx-0">
+            <div class="flex items-start gap-4 mb-6">
+              <span class="material-icons text-4xl text-yellow-500">visibility</span>
+              <div class="text-sm text-slate-700 leading-relaxed">
+                <p class="mb-4">Gebruik deze functie om in te loggen "als" een andere gebruiker (Manager). Je ziet exact dezelfde dashboards, toetsen en resultaten als zij.</p>
+                <p class="font-bold">Let op: <span class="font-normal">Om het systeem veilig te houden is het menu "Uitnodigingen Versturen" verborgen zolang je je in deze meekijk-modus bevindt.</span></p>
+              </div>
+            </div>
+            
+            <div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+              <label class="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">KIES EEN MANAGER ACCOUNT</label>
+              <select id="imp-email-select" class="w-full border border-slate-300 p-3 rounded mb-6 focus:border-[#D32F2F] outline-none bg-white text-slate-700 text-sm"></select>
+              <button onclick="applyImpersonate()" class="w-full py-4 rounded font-bold text-white uppercase tracking-wider flex items-center justify-center gap-2 transition-colors" style="background-color: #1e293b;" onmouseover="this.style.backgroundColor='#0f172a'" onmouseout="this.style.backgroundColor='#1e293b'">
+                <span class="material-icons">login</span> START SESSIE ALS GEBRUIKER
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- OVERIGE VIEWS -->
+        <div id="view-import" class="hidden">
+          <div class="mb-6 border-b border-slate-200 pb-4 w-full">
+            <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">IMPORTEREN</h2>
+            <p class="text-slate-500 text-sm mt-1 font-medium">Batch upload via G4S Template</p>
+          </div>
+          <div class="card p-6 max-w-xl">
+            <label class="block text-xs font-bold uppercase mb-2">Google Sheets URL (Publiek of gedeeld met OST)</label>
+            <input type="text" id="inp-url" class="w-full border p-3 rounded mb-4 focus:border-[#D32F2F] outline-none" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <button onclick="doImport()" class="btn-primary w-full py-3 text-lg"><span class="material-icons mr-2">cloud_download</span> Start Import</button>
+            <div id="i-msg" class="mt-4"></div>
+          </div>
+        </div>
+
+        <div id="view-send" class="hidden">
+          <div class="mb-6 border-b border-slate-200 pb-4 w-full">
+            <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">UITNODIGINGEN VERSTUREN</h2>
+            <p class="text-slate-500 text-sm mt-1 font-medium">Distribueer toetsen naar medewerkers</p>
+          </div>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="card p-6">
+              <h3 class="font-bold text-[#D32F2F] border-b pb-2 mb-4 uppercase tracking-wider text-sm">Stap 1: Configuratie</h3>
+              <label class="block text-xs font-bold uppercase mb-1">Toets Selecteren</label>
+              <select id="send-toets" class="w-full border p-2 rounded mb-4" onchange="updS()"></select>
+              
+              <div class="bg-slate-50 p-3 rounded border mb-4 text-sm">
+                <span class="font-bold text-slate-500 uppercase text-[10px]">Gekoppelde Manager:</span> <span id="inf-man" class="font-medium">...</span><br>
+                <span class="font-bold text-slate-500 uppercase text-[10px]">Totaal vragen in database:</span> <span id="inf-tot" class="font-medium text-[#D32F2F]">...</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label class="block text-xs font-bold uppercase mb-1">Min. Score (%)</label>
+                  <input type="number" id="s-sc" class="w-full border p-2 rounded">
+                </div>
+                <div>
+                  <label class="block text-xs font-bold uppercase mb-1" title="Aantal willekeurige vragen per kandidaat (0 = alles)">Aantal Vragen (0=Alle)</label>
+                  <input type="number" id="s-num" class="w-full border p-2 rounded" value="0" onchange="syncTime()">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label class="block text-xs font-bold uppercase mb-1" title="Maximale tijd in minuten (0 = onbeperkt)">Tijd (Minuten) (0=Geen)</label>
+                  <input type="number" step="0.5" id="s-time" class="w-full border p-2 rounded" value="0">
+                </div>
+                <div>
+                  <label id="lbl-s-rep" class="block text-xs font-bold uppercase mb-1" title="Automatische herhaling in dagen bij een 'Geslaagd' resultaat (0 = niet herhalen)">Herhaling (Dagen) (0=Geen)</label>
+                  <input type="number" id="s-rep" class="w-full border p-2 rounded" value="0">
+                </div>
+              </div>
+
+              <div class="mb-4">
+                <label class="block text-xs font-bold uppercase mb-1 text-[#D32F2F]" title="Zeer belangrijk! Bepaalt naar welk e-mailadres de uitnodiging wordt gerouteerd.">Type Account (Routering)</label>
+                <select id="s-acctype" class="w-full border p-2 rounded bg-white shadow-sm font-medium" onchange="toggleAccountType()">
+                  <option value="Persoonlijk">1. Persoonlijk Account G4S (Routing via Dropdown Info)</option>
+                  <option value="Binnen G4S">2. Binnen G4S (Voor GPL / Coördinatoren)</option>
+                  <option value="Gedeeld">3. Gedeeld Account G4S (Directe levering & Geen Herhaling)</option>
+                </select>
+                <p class="text-xs text-slate-500 mt-1 italic">Lees de handleiding voor meer uitleg over de routeringstypes.</p>
+              </div>
+
+              <div class="mb-4">
+                <label class="block text-xs font-bold uppercase mb-1" title="Wie moeten het PDF resultaat ook ontvangen naast de manager? (gescheiden door komma)">Resultaten CC (E-mailadressen)</label>
+                <textarea id="s-cc" class="w-full border p-2 rounded" rows="2" placeholder="email1@g4s.com, email2@g4s.com"></textarea>
+              </div>
+            </div>
+            
+            <div class="card p-6 flex flex-col">
+              <h3 class="font-bold text-[#D32F2F] border-b pb-2 mb-4 uppercase tracking-wider text-sm">Stap 2: Ontvangers & Versturen</h3>
+              <label class="block text-xs font-bold uppercase mb-1">E-mailadressen (Enter / Komma gescheiden)</label>
+              <textarea id="send-emails" class="w-full border p-3 rounded flex-grow mb-4 font-mono text-sm" placeholder="Kopieer en plak hier de G4S UPN's of e-mailadressen..."></textarea>
+              <button onclick="doSend()" class="btn-primary w-full py-4 text-lg"><span class="material-icons mr-2">send</span> Versturen</button>
+              <div id="s-res" class="mt-4"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="view-gebruikers" class="hidden">
+          <div class="flex justify-between items-center mb-6 border-b border-slate-200 pb-4 w-full">
+            <div>
+              <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">GEBRUIKERSBEHEER</h2>
+              <p class="text-slate-500 text-sm mt-1 font-medium">Beheer admin- en bewerkrechten</p>
+            </div>
+            <button onclick="openAddGebruiker()" class="btn-primary text-xs py-2"><span class="material-icons text-[16px] mr-1">person_add</span> Gebruiker Toevoegen</button>
+          </div>
+          <div class="card overflow-x-auto border-t-0">
+            <table class="data-table">
+              <thead><tr><th>Gebruiker (E-mail)</th><th>Rol</th><th class="text-right">Acties</th></tr></thead>
+              <tbody id="table-gebruikers"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="view-shared-accounts" class="hidden">
+          <div class="flex justify-between items-center mb-6 border-b border-slate-200 pb-4 w-full">
+            <div>
+              <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">GEDEELDE ACCOUNTS</h2>
+              <p class="text-slate-500 text-sm mt-1 font-medium">Beheer van collectieve mailadressen (Account Aanvulling)</p>
+            </div>
+            <button onclick="openAddSharedAccount()" class="btn-primary text-xs py-2"><span class="material-icons text-[16px] mr-1">add_box</span> Account Toevoegen</button>
+          </div>
+          <div class="card overflow-x-auto border-t-0">
+            <table class="data-table">
+              <thead><tr><th>Unit</th><th>KP</th><th>Businessunit</th><th>Regio</th><th>E-mailadres</th><th class="text-right">Acties</th></tr></thead>
+              <tbody id="table-shared-accounts"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="view-logs" class="hidden">
+          <div class="mb-6 border-b border-slate-200 pb-4 w-full">
+            <h2 class="text-2xl font-black text-[#232323] m-0 tracking-tight uppercase">MUTATIE LOGBOEK</h2>
+            <p class="text-slate-500 text-sm mt-1 font-medium">Audit trail van kritieke systeemacties</p>
+          </div>
+          <div class="card overflow-x-auto border-t-0">
+            <table class="data-table">
+              <thead><tr><th>Datum</th><th>Gebruiker</th><th>Actie</th><th>Details</th></tr></thead>
+              <tbody id="table-logs"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="view-handleiding" class="hidden">
+          <?!= include('Handleiding'); ?>
+        </div>
+
+      </div>
+    <? } ?>
+
+    <!-- Modal for Groepsrapport -->
+    <div id="group-report-modal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg border-t-4 border-[#D32F2F]">
+        <div class="flex justify-between items-center p-4 border-b border-slate-100">
+          <h3 class="font-bold text-lg text-[#232323] flex items-center gap-2"><span class="material-icons text-[#D32F2F]">group</span> Groepsrapportage</h3>
+          <button onclick="closeGroupReportModal()" class="text-slate-400 hover:text-red-600"><span class="material-icons">close</span></button>
+        </div>
+        <div class="p-6">
+          <div class="mb-4">
+            <label class="block text-xs font-bold uppercase mb-1 text-slate-500">Stap 1: Selecteer de Toets</label>
+            <select id="gr-toets" class="w-full border p-2 rounded" onchange="updateReportEmailDropdown()"></select>
+          </div>
+          <div class="mb-4">
+            <label class="block text-xs font-bold uppercase mb-1 text-slate-500">Stap 2: Datum Filter (Optioneel)</label>
+            <div class="flex gap-2">
+              <input type="date" id="gr-start" class="w-full border p-2 rounded text-sm text-slate-600">
+              <input type="date" id="gr-end" class="w-full border p-2 rounded text-sm text-slate-600">
+            </div>
+          </div>
+          <div class="mb-6">
+            <label class="block text-xs font-bold uppercase mb-1 text-slate-500">Stap 3: Selecteer Deelnemers</label>
+            <div id="gr-email-container" class="border p-2 rounded max-h-48 overflow-y-auto bg-slate-50 text-sm custom-scrollbar">
+              <div class="text-xs text-slate-400 italic">Kies eerst een toets...</div>
+            </div>
+          </div>
+          <button onclick="generateGroupReport()" class="btn-primary w-full py-3 uppercase tracking-wider"><span class="material-icons mr-2 text-[18px]">auto_graph</span> Genereer Rapport</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modals for Beheer -->
+    <div id="modal-add-user" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg shadow-2xl p-6 max-w-sm w-full border-t-4 border-blue-500">
+        <h3 class="font-bold text-lg mb-4">Nieuwe Gebruiker</h3>
+        <div class="mb-4">
+          <label class="block text-xs font-bold uppercase mb-1">E-mailadres (Of zoek via dropdown)</label>
+          <select id="inp-user-email" class="w-full border p-2 rounded mb-2 select2-style"></select>
+        </div>
+        <div class="mb-6">
+          <label class="block text-xs font-bold uppercase mb-1">Rol</label>
+          <select id="inp-user-rol" class="w-full border p-2 rounded">
+            <option value="Toetsenmaker">Toetsenmaker (Aanvragen/Beheren)</option>
+            <option value="Systeembeheerder">Systeembeheerder (Alles)</option>
+          </select>
+        </div>
+        <div class="flex gap-3 justify-end">
+          <button onclick="closeAddGebruiker()" class="btn-outline">Annuleren</button>
+          <button onclick="saveNieuweGebruiker()" class="btn-primary">Opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-add-shared-account" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full border-t-4 border-emerald-500">
+        <h3 class="font-bold text-lg mb-4">Gedeeld Account Toevoegen</h3>
+        <p class="text-xs text-slate-500 mb-4">Gebruik dit formulier om groep-accounts, balies of meldkamers (zoals <i>beveiliging@nl.g4s.com</i>) te whitelisten in het systeem, zodat ze uitnodigingen kunnen ontvangen.</p>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-bold uppercase mb-1">Unit</label>
+            <input type="text" id="inp-sa-unit" class="w-full border p-2 rounded" placeholder="Bijv. AS">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase mb-1">Kostenplaats (KP)</label>
+            <input type="text" id="inp-sa-kp" class="w-full border p-2 rounded" placeholder="Optioneel">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-bold uppercase mb-1">Businessunit</label>
+            <input type="text" id="inp-sa-bu" class="w-full border p-2 rounded" placeholder="Bijv. Aviation">
+          </div>
+          <div>
+            <label class="block text-xs font-bold uppercase mb-1">Regio</label>
+            <input type="text" id="inp-sa-regio" class="w-full border p-2 rounded" placeholder="Bijv. G4S Schiphol">
+          </div>
+        </div>
+        <div class="mb-6">
+          <label class="block text-xs font-bold uppercase mb-1 text-[#D32F2F]">Gedeeld E-mailadres *</label>
+          <input type="email" id="inp-sa-email" class="w-full border p-2 rounded focus:border-[#D32F2F] outline-none" placeholder="naam@nl.g4s.com">
+        </div>
+        <div class="flex gap-3 justify-end">
+          <button onclick="closeAddSharedAccount()" class="btn-outline">Annuleren</button>
+          <button onclick="saveNieuwSharedAccount()" class="btn-primary">Opslaan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Aanvrager Import -->
+    <div id="modal-aanvrager-import" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-lg w-full border-t-4 border-emerald-500">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="material-icons text-3xl text-emerald-500">upload_file</span>
+                <h3 class="font-bold text-xl text-[#232323]">Template Importeren</h3>
+            </div>
+            <p class="text-sm text-slate-600 mb-6 line-height-relaxed">Plak hieronder de link van je ingevulde G4S Kennistoets Aanleverformulier (Google Sheets). Zorg dat de link deelbaar is, of dat het Operation Support Team er toegang toe heeft.</p>
+            
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Google Sheets URL *</label>
+                <input type="text" id="inp-aanvrager-url" class="w-full border-2 border-slate-200 p-3 rounded focus:border-emerald-500 outline-none transition-colors" placeholder="https://docs.google.com/spreadsheets/d/...">
+            </div>
+            
+            <div class="flex gap-3 justify-end mt-8">
+                <button onclick="closeAanvragerImportModal()" class="btn-outline font-bold">Annuleren</button>
+                <button id="btn-aanvrager-import" onclick="doAanvragerImport()" class="btn-primary bg-emerald-600 hover:bg-emerald-700 px-6 font-bold shadow-md"><span class="material-icons mr-2 text-[18px]">cloud_download</span> Importeren & Indienen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Drawer Overlay -->
+    <div id="help-drawer-overlay" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-[8000] hidden opacity-0 transition-opacity duration-300" onclick="toggleHelpDrawer()"></div>
+    <!-- Help Drawer -->
+    <div id="help-drawer" class="fixed top-0 right-0 w-80 max-w-full h-full bg-white shadow-2xl z-[8001] transform translate-x-full transition-transform duration-300 flex flex-col border-l border-slate-200">
+       <div class="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
+          <h3 class="font-bold text-lg flex items-center gap-2 text-slate-700"><span class="material-icons text-[#D32F2F]">help_outline</span> Hulp & Support</h3>
+          <button onclick="toggleHelpDrawer()" class="text-slate-400 hover:text-red-600"><span class="material-icons">close</span></button>
+       </div>
+       <div class="p-6 overflow-y-auto flex-grow text-sm text-slate-600 space-y-6">
+          <div class="bg-blue-50 border border-blue-100 p-4 rounded-lg mb-4">
+             <h4 class="font-bold text-blue-800 mb-3 uppercase text-xs tracking-wider flex items-center gap-1"><span class="material-icons text-[16px]">info</span> Wat wordt er van mij verwacht?</h4>
+             <p class="mb-3">Als aanvrager kun je hier zelfstandig je eigen kennistoets ontwerpen via de volgende stappen:</p>
+             <ol class="list-decimal pl-4 space-y-2">
+                 <li><b>Stap 1: Ontwerpen.</b> Klik op de knop 'Start Editor'. Vul de details en vragen in. Je kunt tussentijds je werk veilig opslaan via de knop 'Opgeslagen Concepten'.</li>
+                 <li><b>Stap 2: Indienen.</b> Is de toets volledig af en correct? Druk in de editor op de groene knop 'Indienen ter goedkeuring'.</li>
+                 <li><b>Stap 3: Goedkeuring.</b> Het systeem (OST) controleert je aanvraag. Na goedkeuring krijg je bericht en ontvang je automatisch <b>beheerdersrechten</b> om deze toets zelf naar medewerkers te versturen!</li>
+             </ol>
+          </div>
+          <div>
+             <h4 class="font-bold text-[#D32F2F] mb-2 uppercase text-xs tracking-wider">Dashboard Gebruik</h4>
+             <p>Dit dashboard toont real-time statistieken. Je kunt de resultaten filteren per toets via het dropdown-menu bovenin. De grafieken updaten automatisch op basis van je keuze.</p>
+          </div>
+          <div class="border-t border-slate-100 pt-4">
+             <h4 class="font-bold text-[#D32F2F] mb-2 uppercase text-xs tracking-wider">Navigatie</h4>
+             <p>Gebruik het linker menu om naar de verschillende modules te navigeren. Als je de rol 'Beheerder' of 'Toetsenmaker' hebt, zie je extra opties onder het kopje 'Beheer'.</p>
+          </div>
+          <div class="border-t border-slate-100 pt-4">
+             <h4 class="font-bold text-[#D32F2F] mb-2 uppercase text-xs tracking-wider">Onderhoudsmodus</h4>
+             <p>Beheerders kunnen met het 'Slotje' (Onderhoud UIT/AAN) bovenin het portaal tijdelijk sluiten voor kandidaten. Handig tijdens updates aan de toetsen.</p>
+          </div>
+          <div class="border-t border-slate-100 pt-4">
+             <h4 class="font-bold text-[#D32F2F] mb-2 uppercase text-xs tracking-wider">Uitgebreide Hulp</h4>
+             <p>Voor een volledige uitleg van alle processen (inclusief het aanvragen, goedkeuren en versturen), klik je op <b>Handleiding</b> in het linkermenu.</p>
+          </div>
+       </div>
+       <div class="p-6 border-t border-slate-100 bg-slate-50 text-center">
+          <a href="mailto:<?= typeof CONFIG !== 'undefined' ? CONFIG.SUPPORT_EMAIL : 'operation.supportteam@nl.g4s.com' ?>" class="btn-primary w-full justify-center text-sm shadow-sm"><span class="material-icons mr-2 text-[16px]">mail</span> Contact Support Team</a>
+       </div>
+    </div>
+    
+    <script>
+      var GLOBALS = {
+        mode: "<?= mode ?>",
+        toetsIdFromServer: "<?= toetsId ?>",
+        sidFromServer: "<?= sid ?>",
+        userEmail: "<?= userEmail ?>",
+        isAdmin: <?= isAdmin ? 'true' : 'false' ?>,
+        logoUrl: "<?= logoUrl ?>"
+      };
+    </script>
+    <?!= include('JS'); ?>
+  </body>
+</html>
