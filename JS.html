@@ -329,12 +329,14 @@
   var quizTimerInterval = null;
   var videoTimerInterval = null;
   var ytPlayer = null;
+  var ytCheckInterval = null;
   var videoCompleted = false;
   var quizHasVideo = false;
 
   function unlockQuizStartButton() {
     videoCompleted = true;
     if (videoTimerInterval) clearInterval(videoTimerInterval);
+    if (ytCheckInterval) clearInterval(ytCheckInterval);
     var vCountdownText = document.getElementById('video-countdown-text');
     var vCountdownIcon = document.getElementById('video-countdown-icon');
     var vBox = document.getElementById('video-countdown-box');
@@ -1052,7 +1054,7 @@
                 if (vIframe) vIframe.classList.add('hidden');
                 if (ytContainer) ytContainer.classList.remove('hidden');
 
-                if (vCountdownText) vCountdownText.innerText = "Bekijk de YouTube video hierboven. Zodra de video is afgespeeld ontgrendelt de toets!";
+                if (vCountdownText) vCountdownText.innerText = "Bekijk de YouTube video hierboven. Zodra de video volledig is afgespeeld ontgrendelt de toets!";
 
                 var initYTPlayer = function() {
                   if (typeof YT !== 'undefined' && YT.Player) {
@@ -1066,9 +1068,39 @@
                         modestbranding: 1
                       },
                       events: {
+                        'onReady': function(ev) {
+                          // Start een interval om te monitoren hoe lang er nog gekeken moet worden
+                          if (ytCheckInterval) clearInterval(ytCheckInterval);
+                          ytCheckInterval = setInterval(function() {
+                            if (videoCompleted) {
+                              clearInterval(ytCheckInterval);
+                              return;
+                            }
+                            try {
+                              if (ytPlayer && ytPlayer.getDuration && ytPlayer.getCurrentTime) {
+                                var dur = ytPlayer.getDuration();
+                                var cur = ytPlayer.getCurrentTime();
+                                if (dur > 0) {
+                                  var remain = Math.max(0, Math.ceil(dur - cur));
+                                  var minP = Math.floor(remain / 60);
+                                  var secP = remain % 60;
+                                  var timeRemainingStr = (minP > 0 ? minP + "m " : "") + (secP < 10 && minP > 0 ? "0" : "") + secP + "s";
+                                  if (vCountdownText && !videoCompleted) {
+                                    if (cur > 0) {
+                                      vCountdownText.innerText = "Video wordt afgespeeld... (nog " + timeRemainingStr + " te gaan)";
+                                    } else {
+                                      vCountdownText.innerText = "Klik op Play om de instructievideo te starten (" + timeRemainingStr + ")";
+                                    }
+                                  }
+                                }
+                              }
+                            } catch(err) {}
+                          }, 1000);
+                        },
                         'onStateChange': function(ev) {
                           // ev.data === 0 betekent YT.PlayerState.ENDED
                           if (ev.data === 0 || (typeof YT !== 'undefined' && ev.data === YT.PlayerState.ENDED)) {
+                            if (ytCheckInterval) clearInterval(ytCheckInterval);
                             unlockQuizStartButton();
                           }
                         }
@@ -1079,28 +1111,6 @@
                   }
                 };
                 initYTPlayer();
-
-                // Indien er tevens een duur is opgegeven, telt een timer mee als visuele indicatie of fallback
-                if (videoDuurSec > 0) {
-                  var secLeft = videoDuurSec;
-                  var updateCountdown = function() {
-                    if (videoCompleted) return;
-                    if (secLeft <= 0) {
-                      unlockQuizStartButton();
-                    } else {
-                      var minPart = Math.floor(secLeft / 60);
-                      var secPart = secLeft % 60;
-                      var timeStr = (minPart > 0 ? minPart + "m " : "") + (secPart < 10 && minPart > 0 ? "0" : "") + secPart + "s";
-                      if (vCountdownText && !videoCompleted) {
-                        vCountdownText.innerText = "Video bekijken... (knop ontgrendelt over " + timeStr + " of bij einde video)";
-                      }
-                      secLeft--;
-                    }
-                  };
-                  updateCountdown();
-                  if (videoTimerInterval) clearInterval(videoTimerInterval);
-                  videoTimerInterval = setInterval(updateCountdown, 1000);
-                }
               } else {
                 // Google Drive of andere embed video
                 if (ytContainer) ytContainer.classList.add('hidden');
@@ -3246,6 +3256,7 @@
     if (ytPlayer && ytPlayer.stopVideo) {
       try { ytPlayer.stopVideo(); } catch(e) {}
     }
+    if (ytCheckInterval) clearInterval(ytCheckInterval);
     if (videoTimerInterval) clearInterval(videoTimerInterval);
     var vIframe = document.getElementById('quiz-video-iframe');
     if (vIframe) vIframe.src = "";
